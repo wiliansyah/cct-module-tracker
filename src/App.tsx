@@ -484,7 +484,7 @@ export default function App() {
               <ShieldCheck className="h-4 w-4 text-white" />
             </div>
             <div>
-              <h1 className="font-black text-[12px] tracking-tight uppercase leading-tight text-slate-800">CCT Modules <span className="text-blue-600">Evaluation Dashboard</span></h1>
+              <h1 className="font-black text-[12px] tracking-tight uppercase leading-tight text-slate-800">CCT Modules <span className="text-blue-600">Tracker</span></h1>
               <div className="flex items-center gap-1">
                 <div className={`w-1.5 h-1.5 rounded-full ${syncError ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`}></div>
                 <p className="text-[7px] text-slate-400 font-bold uppercase tracking-widest">{syncError || 'Cloud Sync Active'}</p>
@@ -547,7 +547,7 @@ export default function App() {
                 { label: 'New Arrival', val: metrics.newCount, color: 'emerald', icon: FilePlus2 },
                 { label: 'Updates', val: metrics.updatedCount, color: 'indigo', icon: FileEdit },
                 { label: 'Update Rate', val: `${metrics.updateRate}%`, color: 'sky', icon: Activity },
-                { label: 'Avg Score', val: metrics.avgGlobalScore, color: 'amber', icon: TrendingUp }
+                { label: 'Avg old CCT Score', val: metrics.avgGlobalScore, color: 'amber', icon: TrendingUp }
               ].map((card, i) => (
                 <div key={i} className={`bg-white p-3 rounded-2xl border-l-4 border-l-${card.color}-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[72px] relative overflow-hidden group hover:shadow-md transition-all`}>
                   <div className="flex justify-between items-start z-10">
