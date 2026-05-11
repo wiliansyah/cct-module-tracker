@@ -47,7 +47,7 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-getAnalytics(app); // Initialize analytics without assigning to an unused variable
+getAnalytics(app); 
 const auth = getAuth(app);
 const db = getFirestore(app);
 
@@ -203,7 +203,7 @@ export default function App() {
       try {
         await signInAnonymously(auth);
       } catch (err: any) { 
-        console.error("Firebase Auth Error:", err); // Log the error to avoid TS6133
+        console.error("Firebase Auth Error:", err); 
         setSyncError("Auth Fail. Enable Anonymous Auth in Firebase."); 
         setIsLoadingData(false);
       }
@@ -218,10 +218,7 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
-    
-    // Path Database yang disederhanakan untuk Production
     const docRef = doc(db, 'dashboard', 'module_tracker_data_v2');
-    
     const unsubscribe = onSnapshot(docRef, (docSnap: any) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
@@ -232,14 +229,13 @@ export default function App() {
       setIsLoadingData(false);
       setSyncError(null);
     }, (err: any) => {
-      console.error("Firestore Sync Error:", err); // Log the error to avoid TS6133
+      console.error("Firestore Sync Error:", err); 
       setSyncError("Sync Fail. Check Firestore Rules.");
       setIsLoadingData(false);
     });
     return () => unsubscribe();
   }, [user]);
 
-  // PARSE TSV DATA WITH NEW COLUMNS (TypeScript Safe)
   const parsedData = useMemo(() => {
     if (!rawData || rawData.trim() === '') return []; 
     const lines = rawData.trim().split(/\r?\n/);
@@ -254,53 +250,37 @@ export default function App() {
       const obj: Record<string, any> = {};
       headers.forEach((header: string, i: number) => { obj[header] = values[i] ? values[i].trim() : ''; });
       
-      // Standardize status
       const rawStatus = (obj['Status'] || '').toLowerCase();
       if (rawStatus.includes('baru') || rawStatus.includes('new')) obj._normStatus = 'New';
       else if (rawStatus.includes('diperbarui') || rawStatus.includes('updated')) obj._normStatus = 'Updated';
       else obj._normStatus = 'Unchanged';
 
-      // Parse Score
       const parsedScore = parseFloat(obj['Skor CCT']);
       obj._score = isNaN(parsedScore) ? null : parsedScore;
-
-      // Extract Links
       obj._linkNew = obj['Link Terbaru'] || null;
       obj._linkOld = obj['Link File Lama'] || null;
-
-      // Preserve original order
       obj._order = parseInt(obj['No'] || obj['NO']) || 0;
 
-      // Hanya masukkan ke array jika punya nama module (Bypass TS Null Error)
-      if (obj['Nama Module']) {
-        acc.push(obj);
-      }
+      if (obj['Nama Module']) acc.push(obj);
       return acc;
     }, []); 
   }, [rawData]);
 
-  // SUGGESTIONS FOR AUTOCOMPLETE
   const suggestions = useMemo(() => ({
     names: [...new Set(parsedData.map((d: any) => d['Nama Module']).filter(Boolean))].sort(),
     sbus: [...new Set(parsedData.map((d: any) => d['Group SBU/SFU']).filter(Boolean))].sort()
   }), [parsedData]);
 
-  // APPLY GLOBAL FILTERS
   const globallyFilteredData = useMemo(() => {
     let data = parsedData;
-    
     if (searchFilter) {
       const lowerSearch = searchFilter.toLowerCase();
-      data = data.filter((d: any) => 
-        (d['Nama Module'] || '').toLowerCase().includes(lowerSearch)
-      );
+      data = data.filter((d: any) => (d['Nama Module'] || '').toLowerCase().includes(lowerSearch));
     }
     if (sbuFilter) data = data.filter((d: any) => (d['Group SBU/SFU'] || '').toLowerCase().includes(sbuFilter.toLowerCase()));
-    
     return data;
   }, [parsedData, searchFilter, sbuFilter]);
 
-  // CALCULATE METRICS
   const metrics = useMemo(() => {
     const data = globallyFilteredData;
     let newCount = 0, updatedCount = 0, unchangedCount = 0;
@@ -312,7 +292,6 @@ export default function App() {
     data.forEach((d: any) => {
       const sbu = d['Group SBU/SFU'] || 'Unknown SBU';
       if (!sbuMap[sbu]) sbuMap[sbu] = { name: sbu, total: 0, new: 0, updated: 0, scoreSum: 0, scoreCount: 0 };
-      
       sbuMap[sbu].total += 1;
 
       if (d._normStatus === 'New') {
@@ -342,71 +321,46 @@ export default function App() {
       }))
       .sort((a: any, b: any) => b.activityScore - a.activityScore);
 
-    const totalActive = newCount + updatedCount;
-    const updateRate = data.length > 0 ? ((totalActive / data.length) * 100).toFixed(1) : 0;
+    const updateRate = data.length > 0 ? (((newCount + updatedCount) / data.length) * 100).toFixed(1) : 0;
     const avgGlobalScore = scoreCount > 0 ? (totalScore / scoreCount).toFixed(2) : 0;
-
     topScoredModules.sort((a: any, b: any) => b._score - a._score);
 
     return {
-      total: data.length,
-      newCount,
-      updatedCount,
-      unchangedCount,
-      updateRate,
-      avgGlobalScore,
-      sbuSummary,
-      topScoredModules: topScoredModules.slice(0, 5),
-      recentUpdates: [...data].filter((d: any) => d._normStatus !== 'Unchanged').slice(0, 5)
+      total: data.length, newCount, updatedCount, unchangedCount, updateRate, avgGlobalScore,
+      sbuSummary, topScoredModules: topScoredModules.slice(0, 10)
     };
   }, [globallyFilteredData]);
 
-  // FILTER FOR TABLE VIEW
   const tableData = useMemo(() => {
     let baseData = globallyFilteredData;
-    
-    // View Tab Filter
     if (moduleView === 'new') baseData = baseData.filter((d: any) => d._normStatus === 'New');
     else if (moduleView === 'updated') baseData = baseData.filter((d: any) => d._normStatus === 'Updated');
 
-    // Dropdown Status Filter
     if (!statusFilters.includes('all')) {
       baseData = baseData.filter((d: any) => {
-        let matches = false;
-        if (statusFilters.includes('new') && d._normStatus === 'New') matches = true;
-        if (statusFilters.includes('updated') && d._normStatus === 'Updated') matches = true;
-        if (statusFilters.includes('unchanged') && d._normStatus === 'Unchanged') matches = true;
-        return matches;
+        if (statusFilters.includes('new') && d._normStatus === 'New') return true;
+        if (statusFilters.includes('updated') && d._normStatus === 'Updated') return true;
+        if (statusFilters.includes('unchanged') && d._normStatus === 'Unchanged') return true;
+        return false;
       });
     }
 
-    // Sort Order
-    if (sortOrder === 'default') {
-      baseData = [...baseData].sort((a: any, b: any) => a._order - b._order);
-    } else if (sortOrder === 'az') {
-      baseData = [...baseData].sort((a: any, b: any) => (a['Nama Module'] || '').localeCompare(b['Nama Module'] || ''));
-    } else if (sortOrder === 'za') {
-      baseData = [...baseData].sort((a: any, b: any) => (b['Nama Module'] || '').localeCompare(a['Nama Module'] || ''));
-    } else if (sortOrder === 'score_high') {
-      baseData = [...baseData].sort((a: any, b: any) => (b._score || 0) - (a._score || 0));
-    } else if (sortOrder === 'score_low') {
-      baseData = [...baseData].sort((a: any, b: any) => (a._score || 100) - (b._score || 100));
-    }
-
+    if (sortOrder === 'default') baseData = [...baseData].sort((a: any, b: any) => a._order - b._order);
+    else if (sortOrder === 'az') baseData = [...baseData].sort((a: any, b: any) => (a['Nama Module'] || '').localeCompare(b['Nama Module'] || ''));
+    else if (sortOrder === 'za') baseData = [...baseData].sort((a: any, b: any) => (b['Nama Module'] || '').localeCompare(a['Nama Module'] || ''));
+    else if (sortOrder === 'score_high') baseData = [...baseData].sort((a: any, b: any) => (b._score || 0) - (a._score || 0));
+    else if (sortOrder === 'score_low') baseData = [...baseData].sort((a: any, b: any) => (a._score || 100) - (b._score || 100));
     return baseData;
   }, [globallyFilteredData, moduleView, statusFilters, sortOrder]);
 
   const handleToggleFilter = (id: string, current: string[], setter: any) => {
-    if (id === 'all') {
-      setter(['all']);
-    } else {
+    if (id === 'all') setter(['all']);
+    else {
       let next = current.filter(item => item !== 'all');
       if (next.includes(id)) {
         next = next.filter(item => item !== id);
         if (next.length === 0) next = ['all'];
-      } else {
-        next.push(id);
-      }
+      } else next.push(id);
       setter(next);
     }
   };
@@ -419,7 +373,7 @@ export default function App() {
       await setDoc(docRef, { tsvData: rawData, updatedAt: new Date().toISOString(), updatedBy: user.uid });
       setActiveTab('dashboard');
     } catch (e: any) { 
-      console.error("Save Document Error:", e); // Log the error to avoid TS6133
+      console.error("Save Document Error:", e);
       setSyncError("Save Failed. Check Firestore Rules."); 
     }
     finally { setIsSaving(false); }
@@ -428,35 +382,21 @@ export default function App() {
   const handleExportTable = () => {
     const b = new Blob([rawData], { type: 'text/tsv' }); 
     const u = URL.createObjectURL(b); 
-    const a = document.createElement('a'); 
-    a.href = u; 
-    a.download = 'CCT_Module_Tracker_Export.tsv'; 
-    a.click();
+    const a = document.createElement('a'); a.href = u; a.download = 'CCT_Module_Tracker_Export.tsv'; a.click();
   };
 
-  const isAnyFilterActive = searchFilter || sbuFilter;
-  const clearAllFilters = () => { 
-    setSearchFilter(""); 
-    setSbuFilter(""); 
-  };
+  const clearAllFilters = () => { setSearchFilter(""); setSbuFilter(""); };
 
   const StatusBadge = ({ status }: any) => {
-    if (status === 'New') {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-sm">
-          <FilePlus2 size={10} /> NEW
-        </span>
-      );
-    } else if (status === 'Updated') {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-blue-100 text-blue-700 border border-blue-200 shadow-sm">
-          <FileEdit size={10} /> UPDATED
-        </span>
-      );
-    }
+    const styles = status === 'New' 
+      ? 'bg-emerald-100 text-emerald-700 border-emerald-200' 
+      : status === 'Updated' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-600 border-slate-200';
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200 shadow-sm">
-        <CheckCircle2 size={10} /> UNCHANGED
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest border shadow-sm ${styles}`}>
+        {status === 'New' && <FilePlus2 size={10} />}
+        {status === 'Updated' && <FileEdit size={10} />}
+        {status === 'Unchanged' && <CheckCircle2 size={10} />}
+        {status.toUpperCase()}
       </span>
     );
   };
@@ -474,63 +414,54 @@ export default function App() {
   return (
     <div className="h-screen bg-slate-50 text-slate-800 font-sans selection:bg-blue-200 selection:text-blue-900 flex flex-col overflow-hidden">
       
-      {/* HEADER NAVBAR (Light Mode Style) */}
-      <nav className="h-[64px] bg-white text-slate-800 shadow-sm border-b border-slate-200 flex-shrink-0 z-50">
+      {/* NAVBAR */}
+      <nav className="h-[56px] bg-white text-slate-800 shadow-sm border-b border-slate-200 flex-shrink-0 z-50">
         <div className="h-full w-full px-4 sm:px-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-br from-indigo-500 to-blue-600 p-2 rounded-xl shadow-md shadow-blue-200">
+            <div className="bg-gradient-to-br from-indigo-500 to-blue-600 p-1.5 rounded-lg shadow-md shadow-blue-200">
               <ShieldCheck className="h-4 w-4 text-white" />
             </div>
-            <div className="flex flex-col">
-              <h1 className="font-bold text-[13px] tracking-wide uppercase leading-tight text-slate-800">CCT Modules: Update Tracker</h1>
-              <div className="flex items-center gap-1 mt-0.5">
-                <div className={`w-1.5 h-1.5 rounded-full ${syncError ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`}></div>
-                <p className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider">{syncError || 'Cloud Sync Active'}</p>
+            <div>
+              <h1 className="font-bold text-[12px] tracking-wide uppercase leading-tight text-slate-800">CCT Modules: Update Tracker</h1>
+              <div className="flex items-center gap-1">
+                <div className={`w-1 h-1 rounded-full ${syncError ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`}></div>
+                <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">{syncError || 'Cloud Sync Active'}</p>
               </div>
             </div>
           </div>
 
-          <div className="flex bg-slate-50 p-1.5 rounded-xl border border-slate-200 overflow-x-auto">
-            <button 
-              onClick={() => setActiveTab('dashboard')} 
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}
-            >
-              <LayoutDashboard size={12}/> Dashboard
-            </button>
-            <button 
-              onClick={() => setActiveTab('modules')} 
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'modules' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}
-            >
-              <TableProperties size={12}/> Module List
-            </button>
-            <button 
-              onClick={() => setActiveTab('source')} 
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'source' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}
-            >
-              <Upload size={12}/> Source Data
-            </button>
+          <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+            {[ 
+              { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+              { id: 'modules', label: 'Module List', icon: TableProperties },
+              { id: 'source', label: 'Source Data', icon: Upload }
+            ].map(tab => (
+              <button 
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)} 
+                className={`px-3 py-1.5 rounded-md text-[9px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}
+              >
+                <tab.icon size={11}/> {tab.label}
+              </button>
+            ))}
           </div>
         </div>
       </nav>
 
-      {/* GLOBAL FILTERS BAR */}
+      {/* FILTER BAR */}
       {(activeTab === 'dashboard' || activeTab === 'modules') && (
-        <div className="h-[52px] bg-white border-b border-slate-200 flex-shrink-0 z-40 shadow-sm">
+        <div className="h-[48px] bg-white border-b border-slate-200 flex-shrink-0 z-40">
            <div className="h-full w-full px-4 sm:px-6 flex items-center gap-3">
-              <div className="flex items-center gap-1.5 mr-2 hidden sm:flex">
+              <div className="flex items-center gap-1.5 mr-2 hidden sm:flex shrink-0">
                  <Filter size={12} className="text-blue-500" />
-                 <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Filters:</span>
+                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Quick Filters:</span>
               </div>
               <div className="flex gap-2 flex-1 sm:flex-none">
                 <GlobalSuggestionInput value={searchFilter} setValue={setSearchFilter} placeholder="Module Name..." list={suggestions.names} icon={Search} />
                 <GlobalSuggestionInput value={sbuFilter} setValue={setSbuFilter} placeholder="SBU/SFU..." list={suggestions.sbus} icon={Building2} />
               </div>
-              
-              {isAnyFilterActive && (
-                <button 
-                  onClick={clearAllFilters}
-                  className="text-[9px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-full flex items-center gap-1 uppercase tracking-widest transition-colors border border-rose-200 shadow-sm ml-auto"
-                >
+              {(searchFilter || sbuFilter) && (
+                <button onClick={clearAllFilters} className="text-[9px] font-bold text-rose-600 bg-rose-50 px-3 py-1.5 rounded-full flex items-center gap-1 uppercase tracking-widest border border-rose-200 shadow-sm ml-auto transition-colors hover:bg-rose-100">
                   <X size={10} /> Clear
                 </button>
               )}
@@ -538,129 +469,80 @@ export default function App() {
         </div>
       )}
 
-      {/* MAIN CONTENT AREA */}
-      <main className="flex-1 w-full overflow-hidden p-4 sm:p-5 relative bg-slate-50">
+      {/* MAIN CONTENT */}
+      <main className="flex-1 w-full overflow-hidden p-3 sm:p-4 bg-slate-50">
         {isLoadingData ? (
-          <div className="h-full flex flex-col items-center justify-center text-slate-400 animate-in fade-in duration-500">
-            <RefreshCw className="h-8 w-8 animate-spin mb-3 text-blue-500" />
-            <p className="font-semibold text-[10px] tracking-widest uppercase animate-pulse">Loading Tracker Data...</p>
-          </div>
+          <div className="h-full flex flex-col items-center justify-center text-slate-400"><RefreshCw className="h-8 w-8 animate-spin mb-3 text-blue-500" /><p className="font-bold text-[10px] tracking-widest uppercase animate-pulse">Loading Tracker Data...</p></div>
         ) : activeTab === 'dashboard' ? (
           
-          /* ========================================= */
-          /* DASHBOARD VIEW (FIT TO SCREEN)          */
-          /* ========================================= */
-          <div className="h-full flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="h-full flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
             
-            {/* Top Stat Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 shrink-0">
-              <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[90px]">
-                <div className="flex justify-between items-start z-10">
-                  <h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Total Modules</h3>
-                  <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-100"><BookOpen size={14} className="text-blue-500" /></div>
+            {/* Stat Cards - Tampilan Lebih Slim */}
+            <div className="grid grid-cols-5 gap-3 shrink-0">
+              {[
+                { label: 'Total Modules', val: metrics.total, color: 'slate', icon: BookOpen },
+                { label: 'New Modules', val: metrics.newCount, color: 'emerald', icon: FilePlus2 },
+                { label: 'Updated', val: metrics.updatedCount, color: 'blue', icon: FileEdit },
+                { label: 'Update Rate', val: `${metrics.updateRate}%`, color: 'indigo', icon: BarChart3 },
+                { label: 'Avg CCT Score', val: metrics.avgGlobalScore, color: 'amber', icon: Star }
+              ].map((card, i) => (
+                <div key={i} className={`bg-white p-3 rounded-xl border border-${card.color}-200 shadow-sm flex flex-col justify-between h-[75px]`}>
+                  <div className="flex justify-between items-start">
+                    <h3 className={`text-[8px] font-black text-${card.color}-600 uppercase tracking-widest`}>{card.label}</h3>
+                    <card.icon size={12} className={`text-${card.color}-500 opacity-70`} />
+                  </div>
+                  <div className={`text-2xl font-black text-slate-800 tracking-tighter leading-none`}>{card.val}</div>
                 </div>
-                <div className="text-3xl font-black text-slate-800 tracking-tighter z-10 mt-2">{metrics.total}</div>
-              </div>
-
-              <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-200 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[90px]">
-                <div className="flex justify-between items-start z-10">
-                  <h3 className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest">New</h3>
-                  <div className="bg-emerald-100/80 p-1.5 rounded-lg border border-emerald-200/50"><FilePlus2 size={14} className="text-emerald-600" /></div>
-                </div>
-                <div className="text-3xl font-black text-emerald-700 tracking-tighter z-10 mt-2">{metrics.newCount}</div>
-              </div>
-
-              <div className="bg-blue-50 p-3.5 rounded-xl border border-blue-200 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[90px]">
-                <div className="flex justify-between items-start z-10">
-                  <h3 className="text-[9px] font-bold text-blue-600 uppercase tracking-widest">Updated</h3>
-                  <div className="bg-blue-100/80 p-1.5 rounded-lg border border-blue-200/50"><FileEdit size={14} className="text-blue-600" /></div>
-                </div>
-                <div className="text-3xl font-black text-blue-700 tracking-tighter z-10 mt-2">{metrics.updatedCount}</div>
-              </div>
-
-              <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[90px]">
-                <div className="flex justify-between items-start z-10">
-                  <h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Update Rate</h3>
-                  <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-100"><BarChart3 size={14} className="text-indigo-500" /></div>
-                </div>
-                <div className="flex items-baseline gap-1 z-10 mt-2">
-                  <div className="text-3xl font-black text-indigo-600 tracking-tighter">{metrics.updateRate}%</div>
-                </div>
-              </div>
-
-              <div className="bg-amber-50 p-3.5 rounded-xl border border-amber-200 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[90px]">
-                <div className="flex justify-between items-start z-10">
-                  <h3 className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">Avg CCT Score</h3>
-                  <div className="bg-amber-100/80 p-1.5 rounded-lg border border-amber-200/50"><Star size={14} className="text-amber-600" /></div>
-                </div>
-                <div className="flex items-baseline gap-1 z-10 mt-2">
-                  <div className="text-3xl font-black text-amber-600 tracking-tighter">{metrics.avgGlobalScore}</div>
-                </div>
-              </div>
+              ))}
             </div>
 
-            {/* Main Content Grid - Split into columns */}
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3 min-h-0">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3 min-h-0">
               
-              {/* SBU Leaderboard */}
-              <div className="md:col-span-2 bg-white rounded-xl border border-slate-200 flex flex-col min-h-0 shadow-sm">
-                <div className="px-4 py-2.5 border-b border-slate-200 flex items-center justify-between bg-slate-50 flex-shrink-0 rounded-t-xl">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="text-slate-500" size={14} />
-                    <h2 className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">SBU / SFU Update Progress</h2>
-                  </div>
+              {/* SBU Leaderboard - Dibuat 3 kolom di layar besar agar semua terlihat */}
+              <div className="md:col-span-3 bg-white rounded-xl border border-slate-200 flex flex-col min-h-0 shadow-sm">
+                <div className="px-4 py-2 border-b border-slate-200 flex items-center gap-2 bg-slate-50 shrink-0 rounded-t-xl">
+                  <Building2 className="text-slate-500" size={13} />
+                  <h2 className="text-[10px] font-black text-slate-700 uppercase tracking-widest">SBU / SFU Summary</h2>
                 </div>
-                <div className="p-4 flex-1 overflow-y-auto custom-scrollbar">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                <div className="p-3 flex-1 overflow-y-auto custom-scrollbar">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2">
                     {metrics.sbuSummary.map((sbu: any, idx: number) => (
-                      <div key={idx} className="flex flex-col gap-1.5 border-b border-slate-100 pb-2 last:border-0">
+                      <div key={idx} className="flex flex-col gap-1 border-b border-slate-100 pb-1.5 last:border-0">
                         <div className="flex justify-between items-end">
-                          <span className="text-[11px] font-bold text-slate-800 truncate pr-2" title={sbu.name}>{sbu.name}</span>
-                          <div className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider shrink-0">
-                            <span className="text-amber-500 flex items-center gap-0.5" title="Average CCT Score"><Star size={8}/> {sbu.avgScore}</span>
-                            <span className="text-emerald-500 flex items-center gap-0.5"><FilePlus2 size={8}/> {sbu.new}</span>
-                            <span className="text-blue-500 flex items-center gap-0.5"><FileEdit size={8}/> {sbu.updated}</span>
+                          <span className="text-[10px] font-bold text-slate-800 truncate pr-2 uppercase" title={sbu.name}>{sbu.name}</span>
+                          <div className="flex items-center gap-1.5 text-[8px] font-black tracking-tighter shrink-0">
+                            <span className="text-amber-600">★ {sbu.avgScore}</span>
+                            <span className="text-emerald-600">N:{sbu.new}</span>
+                            <span className="text-blue-600">U:{sbu.updated}</span>
                           </div>
                         </div>
-                        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex">
+                        <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden flex">
                           <div className="bg-emerald-500 h-full" style={{ width: `${(sbu.new / sbu.total) * 100}%` }}></div>
                           <div className="bg-blue-500 h-full" style={{ width: `${(sbu.updated / sbu.total) * 100}%` }}></div>
                         </div>
                       </div>
                     ))}
-                    {metrics.sbuSummary.length === 0 && (
-                      <div className="sm:col-span-2 text-center py-8 text-xs text-slate-400">No data matching current filters.</div>
-                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Top Scored Modules - Sederhana & Ringkas */}
+              {/* Top Scored - Lebih compact */}
               <div className="bg-white rounded-xl border border-slate-200 flex flex-col min-h-0 shadow-sm">
-                <div className="px-4 py-2.5 border-b border-slate-200 flex items-center justify-between bg-slate-50 flex-shrink-0 rounded-t-xl">
-                  <div className="flex items-center gap-2">
-                    <Award className="text-amber-500" size={14} />
-                    <h2 className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Top Scored Modules</h2>
-                  </div>
+                <div className="px-4 py-2 border-b border-slate-200 flex items-center gap-2 bg-slate-50 shrink-0 rounded-t-xl">
+                  <Award className="text-amber-500" size={13} />
+                  <h2 className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Top Scores</h2>
                 </div>
                 <div className="p-0 flex-1 overflow-y-auto custom-scrollbar">
                   <div className="divide-y divide-slate-100">
                     {metrics.topScoredModules.map((mod: any, idx: number) => (
-                      <div key={idx} className="px-4 py-2.5 hover:bg-slate-50 transition-colors flex items-center gap-3">
-                        <span className="font-black text-amber-600 text-[11px] w-6 text-center">{mod._score}</span>
+                      <div key={idx} className="px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2">
+                        <span className="font-black text-amber-600 text-[10px] w-5 text-center shrink-0">{mod._score}</span>
                         <div className="flex-1 min-w-0">
-                          <h4 className="text-[11px] font-bold text-slate-800 leading-tight truncate" title={mod['Nama Module']}>
-                            {mod['Nama Module']}
-                          </h4>
+                          <h4 className="text-[9px] font-bold text-slate-800 leading-tight truncate uppercase" title={mod['Nama Module']}>{mod['Nama Module']}</h4>
+                          <p className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter truncate">{mod['Group SBU/SFU']}</p>
                         </div>
-                        <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-wide shrink-0">
-                          {mod['Group SBU/SFU']}
-                        </span>
                       </div>
                     ))}
-                    {metrics.topScoredModules.length === 0 && (
-                      <div className="p-6 text-center text-[10px] text-slate-400 uppercase tracking-widest">No scored modules yet.</div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -670,131 +552,60 @@ export default function App() {
 
         ) : activeTab === 'modules' ? (
           
-          /* ========================================= */
-          /* MODULE LIST VIEW                        */
-          /* ========================================= */
-          <div className="h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="h-full flex flex-col animate-in fade-in duration-300">
             <section className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
-              
-              {/* Table Tabs & Controls */}
               <div className="flex flex-col md:flex-row border-b border-slate-200 bg-slate-50 shrink-0">
                 <div className="flex overflow-x-auto no-scrollbar flex-1">
-                  <button 
-                    onClick={() => setModuleView('all')} 
-                    className={`px-5 py-3 text-[10px] font-bold uppercase tracking-widest transition-all border-b-2 whitespace-nowrap ${moduleView === 'all' ? 'border-indigo-500 text-indigo-600 bg-white' : 'border-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}
-                  >
-                    All ({metrics.total})
-                  </button>
-                  <button 
-                    onClick={() => setModuleView('new')} 
-                    className={`px-5 py-3 text-[10px] font-bold uppercase tracking-widest transition-all border-b-2 whitespace-nowrap flex items-center gap-1.5 ${moduleView === 'new' ? 'border-emerald-500 text-emerald-600 bg-white' : 'border-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}
-                  >
-                    <FilePlus2 size={12} /> New ({metrics.newCount})
-                  </button>
-                  <button 
-                    onClick={() => setModuleView('updated')} 
-                    className={`px-5 py-3 text-[10px] font-bold uppercase tracking-widest transition-all border-b-2 whitespace-nowrap flex items-center gap-1.5 ${moduleView === 'updated' ? 'border-blue-500 text-blue-600 bg-white' : 'border-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}
-                  >
-                    <FileEdit size={12} /> Updated ({metrics.updatedCount})
-                  </button>
+                  {[
+                    { id: 'all', label: 'All', count: metrics.total, color: 'indigo' },
+                    { id: 'new', label: 'New', count: metrics.newCount, color: 'emerald', icon: FilePlus2 },
+                    { id: 'updated', label: 'Updated', count: metrics.updatedCount, color: 'blue', icon: FileEdit }
+                  ].map(v => (
+                    <button key={v.id} onClick={() => setModuleView(v.id)} className={`px-5 py-3 text-[9px] font-black uppercase tracking-widest border-b-2 transition-all whitespace-nowrap flex items-center gap-1.5 ${moduleView === v.id ? `border-${v.color}-500 text-${v.color}-600 bg-white` : 'border-transparent text-slate-400 hover:bg-slate-100 hover:text-slate-800'}`}>
+                      {v.icon && <v.icon size={11} />} {v.label} ({v.count})
+                    </button>
+                  ))}
                 </div>
-                
-                <div className="flex flex-wrap items-center px-4 py-2 md:py-0 border-t md:border-t-0 border-slate-200 gap-2 shrink-0">
-                  <MultiSelectDropdown 
-                    label="Status"
-                    options={[
-                      {id: 'all', label: 'All Status'},
-                      {id: 'new', label: 'New'},
-                      {id: 'updated', label: 'Updated'},
-                      {id: 'unchanged', label: 'Unchanged'}
-                    ]}
-                    selectedValues={statusFilters}
-                    onToggle={(id: string) => handleToggleFilter(id, statusFilters, setStatusFilters)}
-                  />
-
-                  <select value={sortOrder} onChange={(e: any) => setSortOrder(e.target.value)} className="bg-white border border-slate-300 text-slate-700 text-[10px] font-bold uppercase rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-blue-500 h-[34px] cursor-pointer hover:bg-slate-50">
-                    <option value="default">Sort: Default (No)</option>
+                <div className="flex items-center px-4 py-2 md:py-0 border-t md:border-t-0 border-slate-200 gap-2 shrink-0">
+                  <MultiSelectDropdown label="Status" options={[{id: 'all', label: 'All Status'},{id: 'new', label: 'New'},{id: 'updated', label: 'Updated'},{id: 'unchanged', label: 'Unchanged'}]} selectedValues={statusFilters} onToggle={(id: string) => handleToggleFilter(id, statusFilters, setStatusFilters)} />
+                  <select value={sortOrder} onChange={(e: any) => setSortOrder(e.target.value)} className="bg-white border border-slate-300 text-slate-700 text-[9px] font-black uppercase rounded-lg px-2 h-[32px] outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
+                    <option value="default">Sort: Default</option>
                     <option value="score_high">Sort: Highest Score</option>
                     <option value="score_low">Sort: Lowest Score</option>
                     <option value="az">Sort: A-Z</option>
                   </select>
-
-                  <button 
-                    onClick={handleExportTable} 
-                    className="text-[10px] font-bold text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-1.5 uppercase tracking-widest transition-all px-3 h-[34px] rounded-lg shadow-sm"
-                  >
-                    <Download size={12}/> Export
-                  </button>
+                  <button onClick={handleExportTable} className="text-[9px] font-black text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-1.5 uppercase tracking-widest px-3 h-[32px] rounded-lg shadow-sm transition-all"><Download size={11}/> Export</button>
                 </div>
               </div>
 
-              {/* Table Container */}
-              <div className="flex-1 overflow-auto custom-scrollbar relative bg-white" style={{ zIndex: 1 }}>
+              <div className="flex-1 overflow-auto custom-scrollbar relative bg-white">
                 <table className="w-full text-left border-collapse min-w-[800px]">
-                  <thead className="sticky top-0 z-20 bg-slate-50 shadow-sm ring-1 ring-slate-200">
-                    <tr className="text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                      <th className="px-5 py-3 whitespace-nowrap w-12 text-center">NO</th>
+                  <thead className="sticky top-0 z-20 bg-slate-50 shadow-sm border-b border-slate-200">
+                    <tr className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                      <th className="px-5 py-3 w-12 text-center">NO</th>
                       <th className="px-5 py-3 min-w-[250px]">Nama Module</th>
-                      <th className="px-4 py-3 whitespace-nowrap text-center">Status</th>
-                      <th className="px-4 py-3 whitespace-nowrap">Group SBU</th>
-                      <th className="px-4 py-3 whitespace-nowrap text-center">Skor CCT</th>
-                      <th className="px-5 py-3 whitespace-nowrap text-center">Akses Dokumen</th>
+                      <th className="px-4 py-3 text-center">Status</th>
+                      <th className="px-4 py-3">Group SBU</th>
+                      <th className="px-4 py-3 text-center">Skor CCT</th>
+                      <th className="px-5 py-3 text-center">Akses Dokumen</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {tableData.map((row: any, idx: number) => (
                       <tr key={idx} className="hover:bg-slate-50 transition-colors group">
-                        <td className="px-5 py-3 text-[11px] font-semibold text-slate-500 text-center">{row['No'] || row['NO'] || '-'}</td>
-                        <td className="px-5 py-3">
-                          <div className="text-[11px] font-bold text-slate-800 line-clamp-2" title={row['Nama Module']}>
-                             {row['Nama Module'] || '-'}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-center whitespace-nowrap">
-                          <StatusBadge status={row._normStatus} />
-                        </td>
-                        <td className="px-4 py-3 text-[11px] font-semibold text-slate-500 whitespace-nowrap">
-                          {row['Group SBU/SFU'] || '-'}
-                        </td>
-                        <td className="px-4 py-3 text-center whitespace-nowrap">
-                          <ScoreBadge score={row._score} />
-                        </td>
-                        <td className="px-5 py-3 text-center whitespace-nowrap">
+                        <td className="px-5 py-2.5 text-[10px] font-bold text-slate-400 text-center">{row['No'] || row['NO'] || '-'}</td>
+                        <td className="px-5 py-2.5"><div className="text-[10px] font-bold text-slate-800 line-clamp-2 uppercase" title={row['Nama Module']}>{row['Nama Module'] || '-'}</div></td>
+                        <td className="px-4 py-2.5 text-center"><StatusBadge status={row._normStatus} /></td>
+                        <td className="px-4 py-2.5 text-[10px] font-bold text-slate-500 uppercase">{row['Group SBU/SFU'] || '-'}</td>
+                        <td className="px-4 py-2.5 text-center"><ScoreBadge score={row._score} /></td>
+                        <td className="px-5 py-2.5 text-center">
                           <div className="flex items-center justify-center gap-2">
-                            {row._linkNew ? (
-                              <a href={row._linkNew} target="_blank" rel="noreferrer" title="Buka File Terbaru" className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded border border-blue-200 transition-colors">
-                                <ExternalLink size={12} />
-                              </a>
-                            ) : (
-                              <div className="p-1.5 bg-slate-50 text-slate-400 rounded border border-slate-200 cursor-not-allowed" title="Link Terbaru Kosong"><ExternalLink size={12} /></div>
-                            )}
-                            
-                            {row._linkOld ? (
-                              <a href={row._linkOld} target="_blank" rel="noreferrer" title="Buka File Lama" className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded border border-slate-200 transition-colors">
-                                <History size={12} />
-                              </a>
-                            ) : (
-                              <div className="p-1.5 bg-slate-50 text-slate-400 rounded border border-slate-200 cursor-not-allowed" title="Link File Lama Kosong"><History size={12} /></div>
-                            )}
+                            {row._linkNew ? <a href={row._linkNew} target="_blank" rel="noreferrer" className="p-1.5 bg-blue-50 text-blue-600 rounded-md border border-blue-100 transition-colors hover:bg-blue-600 hover:text-white"><ExternalLink size={12} /></a> : <div className="p-1.5 bg-slate-50 text-slate-300 rounded-md border border-slate-100 cursor-not-allowed"><ExternalLink size={12} /></div>}
+                            {row._linkOld ? <a href={row._linkOld} target="_blank" rel="noreferrer" className="p-1.5 bg-slate-50 text-slate-500 rounded-md border border-slate-200 transition-colors hover:bg-slate-600 hover:text-white"><History size={12} /></a> : <div className="p-1.5 bg-slate-50 text-slate-300 rounded-md border border-slate-100 cursor-not-allowed"><History size={12} /></div>}
                           </div>
                         </td>
                       </tr>
                     ))}
-                    {tableData.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="px-6 py-20 text-center text-slate-400 bg-slate-50">
-                          <div className="flex flex-col items-center justify-center gap-3">
-                            <div className="bg-white p-3 rounded-full shadow-sm border border-slate-200">
-                               <AlertCircle size={24} className="text-slate-400" />
-                            </div>
-                            <div>
-                               <p className="text-xs font-bold text-slate-600">No modules found</p>
-                               <p className="text-[10px] font-semibold text-slate-500 mt-1 uppercase tracking-wider">Adjust your filters or search keywords.</p>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                 </table>
               </div>
@@ -803,78 +614,32 @@ export default function App() {
 
         ) : (
           
-          /* ========================================= */
-          /* SOURCE DATA VIEW (Locked)                 */
-          /* ========================================= */
-          <div className="h-full max-w-4xl mx-auto w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="h-full max-w-4xl mx-auto w-full animate-in fade-in duration-300">
              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
                 {!isAuthorized ? (
                   <div className="flex flex-col items-center justify-center flex-1 text-center bg-slate-50 px-6">
-                     <div className="bg-white p-4 rounded-full mb-5 border border-slate-200 shadow-sm">
-                       <Lock size={28} className="text-slate-400" />
-                     </div>
-                     <h2 className="text-lg font-black text-slate-800 mb-1.5 tracking-tight">Access Locked</h2>
-                     <p className="text-[11px] font-semibold text-slate-500 mb-6 max-w-xs">Enter administration password to update raw TSV data.</p>
-                     
+                     <div className="bg-white p-4 rounded-2xl mb-4 border border-slate-200 shadow-sm"><Lock size={24} className="text-slate-400" /></div>
+                     <h2 className="text-lg font-black text-slate-800 mb-1">Access Locked</h2>
+                     <p className="text-[10px] font-bold text-slate-400 mb-6 uppercase tracking-widest">Administrator Credentials Required</p>
                      <div className="flex w-full max-w-xs gap-2">
                         <div className="relative flex-1">
-                           <input 
-                             type={showPassword ? 'text' : 'password'}
-                             value={passwordInput}
-                             onChange={(e: any) => setPasswordInput(e.target.value)}
-                             onKeyDown={(e: any) => { 
-                               if(e.key === 'Enter') {
-                                 if (passwordInput === 'MeratusAcademy') setIsAuthorized(true);
-                                 else alert("Incorrect Password!");
-                               }
-                             }}
-                             placeholder="Enter Password..."
-                             className="w-full h-[38px] bg-white border border-slate-300 px-3 rounded-lg text-[11px] font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none pr-8 shadow-sm"
-                           />
-                           <button 
-                             onClick={() => setShowPassword(!showPassword)} 
-                             className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
-                           >
-                              {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                           </button>
+                           <input type={showPassword ? 'text' : 'password'} value={passwordInput} onChange={(e: any) => setPasswordInput(e.target.value)} onKeyDown={(e: any) => { if(e.key === 'Enter') { if (passwordInput === 'MeratusAcademy') setIsAuthorized(true); else alert("Incorrect Password!"); } }} placeholder="Enter Password..." className="w-full h-[38px] bg-white border border-slate-300 px-3 rounded-lg text-[11px] font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none pr-8" />
+                           <button onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1">{showPassword ? <EyeOff size={13} /> : <Eye size={13} />}</button>
                         </div>
-                        <button 
-                          onClick={() => { 
-                            if(passwordInput === 'MeratusAcademy') setIsAuthorized(true); 
-                            else alert("Incorrect Password!");
-                          }}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 h-[38px] rounded-lg text-[11px] font-bold shadow-md shadow-blue-200 transition-all active:scale-95"
-                        >
-                          Unlock
-                        </button>
+                        <button onClick={() => { if(passwordInput === 'MeratusAcademy') setIsAuthorized(true); else alert("Incorrect Password!"); }} className="bg-blue-600 hover:bg-blue-700 text-white px-5 h-[38px] rounded-lg text-[10px] font-black uppercase shadow-md transition-all active:scale-95">Unlock</button>
                      </div>
                   </div>
                 ) : (
                   <>
                     <div className="px-5 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
                        <div className="flex items-center gap-2.5">
-                         <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><FileSpreadsheet size={16} /></div>
-                         <div>
-                           <h2 className="text-[11px] font-bold text-slate-800">Data Source (TSV)</h2>
-                           <p className="text-[9px] font-semibold text-slate-500 mt-0.5 tracking-wide">Format: No, Nama Module, Status, Group SBU/SFU, Skor CCT, Link Terbaru, Link File Lama</p>
-                         </div>
+                         <div className="bg-indigo-100 p-1.5 rounded-lg text-indigo-600"><FileSpreadsheet size={14} /></div>
+                         <div><h2 className="text-[11px] font-black text-slate-800 uppercase tracking-tight">Data Source (TSV)</h2><p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">TSV Format required</p></div>
                        </div>
-                       <button 
-                         onClick={handleSaveToCloud}
-                         disabled={isSaving}
-                         className="bg-blue-600 hover:bg-blue-700 text-white px-4 h-[32px] rounded-lg text-[10px] font-bold shadow-md shadow-blue-200 transition-all flex items-center gap-1.5 disabled:opacity-70 active:scale-95"
-                       >
-                         {isSaving ? <RefreshCw className="animate-spin" size={12} /> : <Save size={12} />}
-                         {isSaving ? 'Saving...' : 'Save Data'}
-                       </button>
+                       <button onClick={handleSaveToCloud} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white px-4 h-[32px] rounded-lg text-[9px] font-black uppercase shadow-md transition-all flex items-center gap-1.5 disabled:opacity-70 active:scale-95">{isSaving ? <RefreshCw className="animate-spin" size={11} /> : <Save size={11} />} {isSaving ? 'Saving...' : 'Save Data'}</button>
                     </div>
                     <div className="p-3 bg-slate-50 flex-1 flex min-h-0">
-                      <textarea 
-                        value={rawData}
-                        onChange={(e: any) => setRawData(e.target.value)}
-                        className="w-full h-full bg-white border border-slate-300 shadow-sm rounded-lg p-3 text-[10px] leading-relaxed font-mono text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none resize-none custom-scrollbar whitespace-pre"
-                        spellCheck="false"
-                      ></textarea>
+                      <textarea value={rawData} onChange={(e: any) => setRawData(e.target.value)} className="w-full h-full bg-white border border-slate-300 shadow-inner rounded-lg p-3 text-[9px] leading-relaxed font-mono text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none resize-none custom-scrollbar whitespace-pre" spellCheck="false"></textarea>
                     </div>
                   </>
                 )}
@@ -884,10 +649,9 @@ export default function App() {
       </main>
 
       <style dangerouslySetInnerHTML={{__html: `
-        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         @media print {
