@@ -49,8 +49,8 @@ getAnalytics(app);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const DEFAULT_TSV = `No	Nama Module	Status	Group SBU/SFU	Link Terbaru	Link File Lama
-1	Contoh Module Dummy	New	Asset & Charter	https://example.com/new	https://example.com/old`;
+const DEFAULT_TSV = `No Nama Module Status  Group SBU/SFU Link Terbaru  Link File Lama
+1 Contoh Module Dummy New Asset & Charter https://example.com/new https://example.com/old`;
 
 // HRBP MAPPING LOGIC
 const getHRBP = (sbu: string) => {
@@ -205,9 +205,10 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  const { value: searchFilter, setSearchFilter } = useFilterDropdown("");
-  const { value: sbuFilter, setSbuFilter } = useFilterDropdown("");
-  const { value: hrbpFilter, setHrbpFilter } = useFilterDropdown("");
+  // BARIS YANG DIPERBAIKI (Destructuring dengan penamaan ulang/alias properti)
+  const { value: searchFilter, setValue: setSearchFilter } = useFilterDropdown("");
+  const { value: sbuFilter, setValue: setSbuFilter } = useFilterDropdown("");
+  const { value: hrbpFilter, setValue: setHrbpFilter } = useFilterDropdown("");
 
   // FIREBASE INIT
   useEffect(() => {
