@@ -4,8 +4,6 @@ import {
   Upload, 
   BookOpen,
   Building2,
-  Eye,
-  EyeOff,
   Search,
   X,
   RefreshCw,
@@ -13,7 +11,6 @@ import {
   Save,
   FileSpreadsheet,
   CheckCircle2,
-  AlertCircle,
   Filter,
   BarChart3,
   Lock,
@@ -26,7 +23,12 @@ import {
   ExternalLink,
   History,
   Star,
-  Award
+  Award,
+  TrendingUp,
+  Activity,
+  Eye,
+  EyeOff,
+  Users
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAnalytics } from "firebase/analytics";
@@ -53,6 +55,19 @@ const db = getFirestore(app);
 
 const DEFAULT_TSV = `No	Nama Module	Status	Group SBU/SFU	Skor CCT	Link Terbaru	Link File Lama
 1	Contoh Module Dummy	New	Asset & Charter	8.5	https://example.com/new	https://example.com/old`;
+
+// HRBP MAPPING LOGIC
+const getHRBP = (sbu: string) => {
+  const s = (sbu || '').toLowerCase();
+  if (s.includes('asset') || s.includes('charter')) return 'Akbar';
+  if (s.includes('bpm') || s.includes('it')) return 'Berhard';
+  if (s.includes('corp') || s.includes('fin') || s.includes('acc') || s.includes('ga') || s.includes('hmm') || s.includes('hr') || s.includes('audit') || s.includes('legal') || s.includes('procurement')) return 'Sherly';
+  if (s.includes('crewing') || s.includes('msm')) return 'Sentra';
+  if (s.includes('commercial') || s.includes('operation') || s.includes('trade') || s.includes('academy')) return 'Andrew';
+  if (s.includes('logistic') || s.includes('trucking')) return 'Taufik';
+  if (s.includes('mtm') || s.includes('terminal')) return 'Ronny';
+  return 'Unassigned';
+};
 
 // Reusable Components
 const MultiSelectDropdown = ({ label, options, selectedValues, onToggle }: any) => {
@@ -129,13 +144,13 @@ const GlobalSuggestionInput = ({ value, setValue, placeholder, list, icon: Icon 
   }, []);
 
   return (
-    <div className="relative w-full sm:w-56 flex-shrink-0" ref={ref}>
+    <div className="relative w-full sm:w-48 lg:w-56 flex-shrink-0" ref={ref}>
       <div className="relative flex items-center group">
-        <Icon className="absolute left-3.5 h-4 w-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+        <Icon className="absolute left-3.5 h-3.5 w-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
         <input 
           type="text" 
           placeholder={placeholder} 
-          className="w-full pl-10 pr-8 py-1.5 h-[34px] bg-white border border-slate-300 shadow-sm rounded-lg text-[11px] font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 placeholder:font-medium"
+          className="w-full pl-9 pr-8 py-1.5 h-[32px] bg-white border border-slate-300 shadow-sm rounded-lg text-[10px] font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400"
           value={value}
           onChange={(e: any) => { setValue(e.target.value); setIsOpen(true); }}
           onFocus={() => setIsOpen(true)}
@@ -156,7 +171,7 @@ const GlobalSuggestionInput = ({ value, setValue, placeholder, list, icon: Icon 
               <button 
                 key={i} 
                 type="button"
-                className="w-full text-left px-4 py-2.5 text-[11px] hover:bg-slate-50 text-slate-700 font-medium transition-colors border-b last:border-0 border-slate-100"
+                className="w-full text-left px-4 py-2.5 text-[11px] hover:bg-slate-50 text-slate-700 font-bold transition-colors border-b last:border-0 border-slate-100 uppercase"
                 onClick={(e: any) => { 
                   e.preventDefault(); 
                   setValue(item); 
@@ -196,6 +211,7 @@ export default function App() {
 
   const { value: searchFilter, setValue: setSearchFilter } = useFilterDropdown("");
   const { value: sbuFilter, setValue: setSbuFilter } = useFilterDropdown("");
+  const { value: hrbpFilter, setValue: setHrbpFilter } = useFilterDropdown("");
 
   // FIREBASE INIT
   useEffect(() => {
@@ -204,7 +220,7 @@ export default function App() {
         await signInAnonymously(auth);
       } catch (err: any) { 
         console.error("Firebase Auth Error:", err); 
-        setSyncError("Auth Fail. Enable Anonymous Auth in Firebase."); 
+        setSyncError("Auth Fail"); 
         setIsLoadingData(false);
       }
     };
@@ -230,7 +246,7 @@ export default function App() {
       setSyncError(null);
     }, (err: any) => {
       console.error("Firestore Sync Error:", err); 
-      setSyncError("Sync Fail. Check Firestore Rules.");
+      setSyncError("Sync Fail");
       setIsLoadingData(false);
     });
     return () => unsubscribe();
@@ -260,6 +276,9 @@ export default function App() {
       obj._linkNew = obj['Link Terbaru'] || null;
       obj._linkOld = obj['Link File Lama'] || null;
       obj._order = parseInt(obj['No'] || obj['NO']) || 0;
+      
+      // Auto Assign HRBP
+      obj._hrbp = getHRBP(obj['Group SBU/SFU']);
 
       if (obj['Nama Module']) acc.push(obj);
       return acc;
@@ -268,7 +287,8 @@ export default function App() {
 
   const suggestions = useMemo(() => ({
     names: [...new Set(parsedData.map((d: any) => d['Nama Module']).filter(Boolean))].sort(),
-    sbus: [...new Set(parsedData.map((d: any) => d['Group SBU/SFU']).filter(Boolean))].sort()
+    sbus: [...new Set(parsedData.map((d: any) => d['Group SBU/SFU']).filter(Boolean))].sort(),
+    hrbps: [...new Set(parsedData.map((d: any) => d._hrbp).filter(Boolean))].sort()
   }), [parsedData]);
 
   const globallyFilteredData = useMemo(() => {
@@ -278,8 +298,9 @@ export default function App() {
       data = data.filter((d: any) => (d['Nama Module'] || '').toLowerCase().includes(lowerSearch));
     }
     if (sbuFilter) data = data.filter((d: any) => (d['Group SBU/SFU'] || '').toLowerCase().includes(sbuFilter.toLowerCase()));
+    if (hrbpFilter) data = data.filter((d: any) => (d._hrbp || '').toLowerCase().includes(hrbpFilter.toLowerCase()));
     return data;
-  }, [parsedData, searchFilter, sbuFilter]);
+  }, [parsedData, searchFilter, sbuFilter, hrbpFilter]);
 
   const metrics = useMemo(() => {
     const data = globallyFilteredData;
@@ -291,7 +312,7 @@ export default function App() {
 
     data.forEach((d: any) => {
       const sbu = d['Group SBU/SFU'] || 'Unknown SBU';
-      if (!sbuMap[sbu]) sbuMap[sbu] = { name: sbu, total: 0, new: 0, updated: 0, scoreSum: 0, scoreCount: 0 };
+      if (!sbuMap[sbu]) sbuMap[sbu] = { name: sbu, total: 0, new: 0, updated: 0, scoreSum: 0, scoreCount: 0, hrbp: d._hrbp };
       sbuMap[sbu].total += 1;
 
       if (d._normStatus === 'New') {
@@ -317,7 +338,7 @@ export default function App() {
       .map((s: any) => ({
         ...s,
         activityScore: s.new * 2 + s.updated,
-        avgScore: s.scoreCount > 0 ? (s.scoreSum / s.scoreCount).toFixed(1) : '-'
+        avgScore: s.scoreCount > 0 ? (s.scoreSum / s.scoreCount).toFixed(2) : '-'
       }))
       .sort((a: any, b: any) => b.activityScore - a.activityScore);
 
@@ -327,7 +348,7 @@ export default function App() {
 
     return {
       total: data.length, newCount, updatedCount, unchangedCount, updateRate, avgGlobalScore,
-      sbuSummary, topScoredModules: topScoredModules.slice(0, 10)
+      sbuSummary, topScoredModules: topScoredModules.slice(0, 15) // Get up to 15 for top score
     };
   }, [globallyFilteredData]);
 
@@ -374,18 +395,59 @@ export default function App() {
       setActiveTab('dashboard');
     } catch (e: any) { 
       console.error("Save Document Error:", e);
-      setSyncError("Save Failed. Check Firestore Rules."); 
+      setSyncError("Save Failed"); 
     }
     finally { setIsSaving(false); }
   };
 
   const handleExportTable = () => {
+    // Export raw TSV data
     const b = new Blob([rawData], { type: 'text/tsv' }); 
     const u = URL.createObjectURL(b); 
-    const a = document.createElement('a'); a.href = u; a.download = 'CCT_Module_Tracker_Export.tsv'; a.click();
+    const a = document.createElement('a'); a.href = u; a.download = 'CCT_Module_Tracker_Raw.tsv'; a.click();
   };
 
-  const clearAllFilters = () => { setSearchFilter(""); setSbuFilter(""); };
+  const handleExportExcel = () => {
+    // Export filtered Table Data to CSV (for Excel)
+    if (tableData.length === 0) return;
+    
+    const headers = ['No', 'Nama Module', 'Status', 'Group SBU/SFU', 'HRBP', 'Skor CCT', 'Link Terbaru', 'Link File Lama'];
+    
+    // Helper to safely escape CSV values
+    const escapeCSV = (val: any) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val);
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    const csvRows = [headers.join(',')];
+
+    tableData.forEach((row: any) => {
+      const rowData = [
+        escapeCSV(row['No'] || row['NO']),
+        escapeCSV(row['Nama Module']),
+        escapeCSV(row._normStatus),
+        escapeCSV(row['Group SBU/SFU']),
+        escapeCSV(row._hrbp),
+        escapeCSV(row._score),
+        escapeCSV(row._linkNew),
+        escapeCSV(row._linkOld)
+      ];
+      csvRows.push(rowData.join(','));
+    });
+
+    const csvString = csvRows.join('\n');
+    // Add BOM (\ufeff) so Excel correctly recognizes UTF-8 characters
+    const blob = new Blob(["\ufeff" + csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `CCT_Modules_Export_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const clearAllFilters = () => { setSearchFilter(""); setSbuFilter(""); setHrbpFilter(""); };
 
   const StatusBadge = ({ status }: any) => {
     const styles = status === 'New' 
@@ -412,34 +474,34 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen bg-slate-50 text-slate-800 font-sans selection:bg-blue-200 selection:text-blue-900 flex flex-col overflow-hidden">
+    <div className="h-screen bg-[#F8FAFC] text-slate-800 font-sans selection:bg-blue-200 selection:text-blue-900 flex flex-col overflow-hidden">
       
       {/* NAVBAR */}
-      <nav className="h-[56px] bg-white text-slate-800 shadow-sm border-b border-slate-200 flex-shrink-0 z-50">
-        <div className="h-full w-full px-4 sm:px-6 flex items-center justify-between">
+      <nav className="h-[48px] bg-white text-slate-800 shadow-sm border-b border-slate-200 flex-shrink-0 z-50">
+        <div className="h-full w-full px-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-br from-indigo-500 to-blue-600 p-1.5 rounded-lg shadow-md shadow-blue-200">
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-1 rounded-lg shadow-md">
               <ShieldCheck className="h-4 w-4 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-[12px] tracking-wide uppercase leading-tight text-slate-800">CCT Modules: Update Tracker</h1>
+              <h1 className="font-black text-[12px] tracking-tight uppercase leading-tight text-slate-800">CCT Modules <span className="text-blue-600">Evaluation Dashboard</span></h1>
               <div className="flex items-center gap-1">
-                <div className={`w-1 h-1 rounded-full ${syncError ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`}></div>
-                <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">{syncError || 'Cloud Sync Active'}</p>
+                <div className={`w-1.5 h-1.5 rounded-full ${syncError ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`}></div>
+                <p className="text-[7px] text-slate-400 font-bold uppercase tracking-widest">{syncError || 'Cloud Sync Active'}</p>
               </div>
             </div>
           </div>
 
           <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
             {[ 
-              { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-              { id: 'modules', label: 'Module List', icon: TableProperties },
+              { id: 'dashboard', label: 'Executive Dashboard', icon: LayoutDashboard },
+              { id: 'modules', label: 'Detail View', icon: TableProperties },
               { id: 'source', label: 'Source Data', icon: Upload }
             ].map(tab => (
               <button 
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)} 
-                className={`px-3 py-1.5 rounded-md text-[9px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}
+                className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-2 ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
               >
                 <tab.icon size={11}/> {tab.label}
               </button>
@@ -448,20 +510,21 @@ export default function App() {
         </div>
       </nav>
 
-      {/* FILTER BAR */}
+      {/* FILTER BAR - NOW INCLUDES HRBP */}
       {(activeTab === 'dashboard' || activeTab === 'modules') && (
-        <div className="h-[48px] bg-white border-b border-slate-200 flex-shrink-0 z-40">
-           <div className="h-full w-full px-4 sm:px-6 flex items-center gap-3">
-              <div className="flex items-center gap-1.5 mr-2 hidden sm:flex shrink-0">
+        <div className="h-[44px] bg-white border-b border-slate-100 flex-shrink-0 z-40 shadow-sm">
+           <div className="h-full w-full px-4 flex items-center gap-3 overflow-x-auto no-scrollbar">
+              <div className="flex items-center gap-1.5 mr-1 shrink-0">
                  <Filter size={12} className="text-blue-500" />
-                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Quick Filters:</span>
+                 <span className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">Global Filters:</span>
               </div>
               <div className="flex gap-2 flex-1 sm:flex-none">
-                <GlobalSuggestionInput value={searchFilter} setValue={setSearchFilter} placeholder="Module Name..." list={suggestions.names} icon={Search} />
-                <GlobalSuggestionInput value={sbuFilter} setValue={setSbuFilter} placeholder="SBU/SFU..." list={suggestions.sbus} icon={Building2} />
+                <GlobalSuggestionInput value={hrbpFilter} setValue={setHrbpFilter} placeholder="Filter HRBP..." list={suggestions.hrbps} icon={Users} />
+                <GlobalSuggestionInput value={sbuFilter} setValue={setSbuFilter} placeholder="Filter SBU/SFU..." list={suggestions.sbus} icon={Building2} />
+                <GlobalSuggestionInput value={searchFilter} setValue={setSearchFilter} placeholder="Search Module Name..." list={suggestions.names} icon={Search} />
               </div>
-              {(searchFilter || sbuFilter) && (
-                <button onClick={clearAllFilters} className="text-[9px] font-bold text-rose-600 bg-rose-50 px-3 py-1.5 rounded-full flex items-center gap-1 uppercase tracking-widest border border-rose-200 shadow-sm ml-auto transition-colors hover:bg-rose-100">
+              {(searchFilter || sbuFilter || hrbpFilter) && (
+                <button onClick={clearAllFilters} className="text-[8px] font-black text-rose-500 bg-rose-50 px-3 py-1.5 rounded-full flex items-center gap-1 uppercase tracking-widest border border-rose-100 shadow-sm ml-auto transition-colors hover:bg-rose-100 shrink-0">
                   <X size={10} /> Clear
                 </button>
               )}
@@ -470,80 +533,129 @@ export default function App() {
       )}
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 w-full overflow-hidden p-3 sm:p-4 bg-slate-50">
+      <main className="flex-1 w-full overflow-hidden p-3 sm:p-4 bg-[#F8FAFC]">
         {isLoadingData ? (
-          <div className="h-full flex flex-col items-center justify-center text-slate-400"><RefreshCw className="h-8 w-8 animate-spin mb-3 text-blue-500" /><p className="font-bold text-[10px] tracking-widest uppercase animate-pulse">Loading Tracker Data...</p></div>
+          <div className="h-full flex flex-col items-center justify-center text-slate-400"><RefreshCw className="h-8 w-8 animate-spin mb-3 text-blue-500" /><p className="font-bold text-[10px] tracking-widest uppercase animate-pulse">Synchronizing Data...</p></div>
         ) : activeTab === 'dashboard' ? (
           
-          <div className="h-full flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <div className="h-full flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
             
-            {/* Stat Cards - Tampilan Lebih Slim */}
-            <div className="grid grid-cols-5 gap-3 shrink-0">
+            {/* Top Stat Cards - Premium Look */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 shrink-0">
               {[
-                { label: 'Total Modules', val: metrics.total, color: 'slate', icon: BookOpen },
-                { label: 'New Modules', val: metrics.newCount, color: 'emerald', icon: FilePlus2 },
-                { label: 'Updated', val: metrics.updatedCount, color: 'blue', icon: FileEdit },
-                { label: 'Update Rate', val: `${metrics.updateRate}%`, color: 'indigo', icon: BarChart3 },
-                { label: 'Avg CCT Score', val: metrics.avgGlobalScore, color: 'amber', icon: Star }
+                { label: 'Total Modules', val: metrics.total, color: 'blue', icon: BookOpen },
+                { label: 'New Arrival', val: metrics.newCount, color: 'emerald', icon: FilePlus2 },
+                { label: 'Updates', val: metrics.updatedCount, color: 'indigo', icon: FileEdit },
+                { label: 'Update Rate', val: `${metrics.updateRate}%`, color: 'sky', icon: Activity },
+                { label: 'Avg Score', val: metrics.avgGlobalScore, color: 'amber', icon: TrendingUp }
               ].map((card, i) => (
-                <div key={i} className={`bg-white p-3 rounded-xl border border-${card.color}-200 shadow-sm flex flex-col justify-between h-[75px]`}>
-                  <div className="flex justify-between items-start">
-                    <h3 className={`text-[8px] font-black text-${card.color}-600 uppercase tracking-widest`}>{card.label}</h3>
-                    <card.icon size={12} className={`text-${card.color}-500 opacity-70`} />
+                <div key={i} className={`bg-white p-3 rounded-2xl border-l-4 border-l-${card.color}-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[72px] relative overflow-hidden group hover:shadow-md transition-all`}>
+                  <div className="flex justify-between items-start z-10">
+                    <h3 className={`text-[9px] font-black text-${card.color}-600 uppercase tracking-widest`}>{card.label}</h3>
+                    <card.icon size={12} className={`text-${card.color}-500 opacity-60`} />
                   </div>
-                  <div className={`text-2xl font-black text-slate-800 tracking-tighter leading-none`}>{card.val}</div>
+                  <div className="text-2xl font-black text-slate-800 tracking-tighter leading-none z-10">{card.val}</div>
+                  <div className={`absolute -right-2 -bottom-2 opacity-[0.03] group-hover:scale-110 transition-transform`}><card.icon size={50} /></div>
                 </div>
               ))}
             </div>
 
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3 min-h-0">
+            {/* Split Content: SBU Grid vs Top Score */}
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-4 min-h-0">
               
-              {/* SBU Leaderboard - Dibuat 3 kolom di layar besar agar semua terlihat */}
-              <div className="md:col-span-3 bg-white rounded-xl border border-slate-200 flex flex-col min-h-0 shadow-sm">
-                <div className="px-4 py-2 border-b border-slate-200 flex items-center gap-2 bg-slate-50 shrink-0 rounded-t-xl">
-                  <Building2 className="text-slate-500" size={13} />
-                  <h2 className="text-[10px] font-black text-slate-700 uppercase tracking-widest">SBU / SFU Summary</h2>
+              {/* Left Column: Premium SBU Summary */}
+              <div className="md:col-span-8 bg-white rounded-2xl border border-slate-200 flex flex-col min-h-0 shadow-sm overflow-hidden">
+                <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between bg-white shrink-0">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="text-blue-500" size={16} />
+                    <h2 className="text-[12px] font-black text-slate-800 uppercase tracking-widest">SBU / SFU Progress Tracking</h2>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> NEW</span>
+                    <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> UPDATED</span>
+                  </div>
                 </div>
-                <div className="p-3 flex-1 overflow-y-auto custom-scrollbar">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2">
+                
+                {/* Scrollable Grid Area */}
+                <div className="p-4 flex-1 overflow-y-auto custom-scrollbar bg-slate-50/50">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {metrics.sbuSummary.map((sbu: any, idx: number) => (
-                      <div key={idx} className="flex flex-col gap-1 border-b border-slate-100 pb-1.5 last:border-0">
-                        <div className="flex justify-between items-end">
-                          <span className="text-[10px] font-bold text-slate-800 truncate pr-2 uppercase" title={sbu.name}>{sbu.name}</span>
-                          <div className="flex items-center gap-1.5 text-[8px] font-black tracking-tighter shrink-0">
-                            <span className="text-amber-600">★ {sbu.avgScore}</span>
-                            <span className="text-emerald-600">N:{sbu.new}</span>
-                            <span className="text-blue-600">U:{sbu.updated}</span>
+                      <div key={idx} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2 hover:border-blue-300 hover:shadow-md transition-all">
+                        
+                        {/* Header: SBU Name & Score */}
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[11px] font-black text-slate-800 truncate block uppercase leading-tight" title={sbu.name}>{sbu.name}</span>
+                          </div>
+                          <div className="flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
+                             <Star size={9} className="text-amber-500 fill-amber-500" />
+                             <span className="text-[10px] font-black text-amber-700">{sbu.avgScore}</span>
                           </div>
                         </div>
-                        <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden flex">
-                          <div className="bg-emerald-500 h-full" style={{ width: `${(sbu.new / sbu.total) * 100}%` }}></div>
-                          <div className="bg-blue-500 h-full" style={{ width: `${(sbu.updated / sbu.total) * 100}%` }}></div>
+                        
+                        {/* Detail: Total Modules & HRBP */}
+                        <div className="flex flex-col gap-0.5">
+                           <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{sbu.total} Total Modules</span>
+                           <span className="text-[8px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-1"><Users size={9} /> HRBP: {sbu.hrbp}</span>
                         </div>
+                        
+                        {/* Progress Details */}
+                        <div className="flex flex-col gap-1.5 mt-1">
+                          <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-widest">
+                            <span className="text-emerald-600">New: {sbu.new}</span>
+                            <span className="text-blue-600">Update: {sbu.updated}</span>
+                          </div>
+                          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden flex shadow-inner">
+                            <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-full" style={{ width: `${(sbu.new / sbu.total) * 100}%` }}></div>
+                            <div className="bg-gradient-to-r from-blue-400 to-blue-500 h-full" style={{ width: `${(sbu.updated / sbu.total) * 100}%` }}></div>
+                          </div>
+                        </div>
+
                       </div>
                     ))}
+                    {metrics.sbuSummary.length === 0 && (
+                      <div className="col-span-full text-center py-8 text-xs text-slate-400 font-bold uppercase tracking-widest">No data matching current filters.</div>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Top Scored - Lebih compact */}
-              <div className="bg-white rounded-xl border border-slate-200 flex flex-col min-h-0 shadow-sm">
-                <div className="px-4 py-2 border-b border-slate-200 flex items-center gap-2 bg-slate-50 shrink-0 rounded-t-xl">
-                  <Award className="text-amber-500" size={13} />
-                  <h2 className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Top Scores</h2>
+              {/* Right Column: Premium Hall of Fame */}
+              <div className="md:col-span-4 bg-white rounded-2xl border border-slate-200 flex flex-col min-h-0 shadow-sm overflow-hidden">
+                <div className="px-5 py-3 border-b border-slate-200 flex items-center gap-2 bg-white shrink-0">
+                  <Award className="text-amber-500" size={16} />
+                  <h2 className="text-[12px] font-black text-slate-800 uppercase tracking-widest">Hall of Fame</h2>
                 </div>
-                <div className="p-0 flex-1 overflow-y-auto custom-scrollbar">
-                  <div className="divide-y divide-slate-100">
-                    {metrics.topScoredModules.map((mod: any, idx: number) => (
-                      <div key={idx} className="px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2">
-                        <span className="font-black text-amber-600 text-[10px] w-5 text-center shrink-0">{mod._score}</span>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-[9px] font-bold text-slate-800 leading-tight truncate uppercase" title={mod['Nama Module']}>{mod['Nama Module']}</h4>
-                          <p className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter truncate">{mod['Group SBU/SFU']}</p>
+                <div className="p-0 flex-1 overflow-y-auto custom-scrollbar divide-y divide-slate-100">
+                  {metrics.topScoredModules.map((mod: any, idx: number) => (
+                    <div key={idx} className="px-5 py-3 hover:bg-slate-50 flex items-center gap-3.5 transition-colors group">
+                      
+                      {/* Rank Badge */}
+                      <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 border-2 shadow-sm ${idx < 3 ? 'bg-amber-50 border-amber-300 text-amber-600' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                        <span className="text-[11px] font-black">{idx + 1}</span>
+                      </div>
+                      
+                      {/* Text Detail */}
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-[10px] font-black text-slate-800 leading-tight truncate uppercase group-hover:text-blue-600 transition-colors" title={mod['Nama Module']}>{mod['Nama Module']}</h4>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest truncate">{mod['Group SBU/SFU']}</p>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                      
+                      {/* Score Highlight */}
+                      <div className="flex flex-col items-end shrink-0">
+                        <span className="text-[13px] font-black text-blue-600 leading-none">{mod._score}</span>
+                        <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Points</span>
+                      </div>
+                    </div>
+                  ))}
+                  {metrics.topScoredModules.length === 0 && (
+                    <div className="p-8 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest">No scored modules yet.</div>
+                  )}
+                </div>
+                <div className="px-5 py-2.5 bg-slate-50 border-t border-slate-200 shrink-0">
+                   <p className="text-[8px] text-center font-bold text-slate-400 uppercase tracking-[0.25em]">Top 15 Quality Benchmarking</p>
                 </div>
               </div>
 
@@ -553,55 +665,63 @@ export default function App() {
         ) : activeTab === 'modules' ? (
           
           <div className="h-full flex flex-col animate-in fade-in duration-300">
-            <section className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
-              <div className="flex flex-col md:flex-row border-b border-slate-200 bg-slate-50 shrink-0">
-                <div className="flex overflow-x-auto no-scrollbar flex-1">
+            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="flex flex-col md:flex-row border-b border-slate-200 bg-slate-50/50 shrink-0">
+                <div className="flex overflow-x-auto no-scrollbar flex-1 p-1">
                   {[
-                    { id: 'all', label: 'All', count: metrics.total, color: 'indigo' },
-                    { id: 'new', label: 'New', count: metrics.newCount, color: 'emerald', icon: FilePlus2 },
-                    { id: 'updated', label: 'Updated', count: metrics.updatedCount, color: 'blue', icon: FileEdit }
+                    { id: 'all', label: 'Library', count: metrics.total, color: 'indigo' },
+                    { id: 'new', label: 'New', count: metrics.newCount, color: 'emerald' },
+                    { id: 'updated', label: 'Updated', count: metrics.updatedCount, color: 'blue' }
                   ].map(v => (
-                    <button key={v.id} onClick={() => setModuleView(v.id)} className={`px-5 py-3 text-[9px] font-black uppercase tracking-widest border-b-2 transition-all whitespace-nowrap flex items-center gap-1.5 ${moduleView === v.id ? `border-${v.color}-500 text-${v.color}-600 bg-white` : 'border-transparent text-slate-400 hover:bg-slate-100 hover:text-slate-800'}`}>
-                      {v.icon && <v.icon size={11} />} {v.label} ({v.count})
+                    <button key={v.id} onClick={() => setModuleView(v.id)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${moduleView === v.id ? `bg-white text-${v.color}-600 shadow-sm border border-slate-200` : 'text-slate-400 hover:text-slate-800'}`}>
+                      {v.label} <span className={`ml-1 px-1.5 py-0.5 rounded-full bg-${v.color}-50 text-${v.color}-600 text-[8px]`}>{v.count}</span>
                     </button>
                   ))}
                 </div>
-                <div className="flex items-center px-4 py-2 md:py-0 border-t md:border-t-0 border-slate-200 gap-2 shrink-0">
-                  <MultiSelectDropdown label="Status" options={[{id: 'all', label: 'All Status'},{id: 'new', label: 'New'},{id: 'updated', label: 'Updated'},{id: 'unchanged', label: 'Unchanged'}]} selectedValues={statusFilters} onToggle={(id: string) => handleToggleFilter(id, statusFilters, setStatusFilters)} />
-                  <select value={sortOrder} onChange={(e: any) => setSortOrder(e.target.value)} className="bg-white border border-slate-300 text-slate-700 text-[9px] font-black uppercase rounded-lg px-2 h-[32px] outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
-                    <option value="default">Sort: Default</option>
-                    <option value="score_high">Sort: Highest Score</option>
-                    <option value="score_low">Sort: Lowest Score</option>
-                    <option value="az">Sort: A-Z</option>
+                <div className="flex items-center px-4 py-2 md:py-0 border-t md:border-t-0 border-slate-200 gap-2 shrink-0 bg-white md:bg-transparent">
+                  <MultiSelectDropdown label="Status" options={[{id: 'all', label: 'All'},{id: 'new', label: 'New'},{id: 'updated', label: 'Updated'},{id: 'unchanged', label: 'Unchanged'}]} selectedValues={statusFilters} onToggle={(id: string) => handleToggleFilter(id, statusFilters, setStatusFilters)} />
+                  <select value={sortOrder} onChange={(e: any) => setSortOrder(e.target.value)} className="bg-white border border-slate-300 text-slate-700 text-[9px] font-black uppercase rounded-lg px-2 h-[32px] outline-none shadow-sm">
+                    <option value="default">Default Sort</option>
+                    <option value="score_high">High Score</option>
+                    <option value="az">A-Z Name</option>
                   </select>
-                  <button onClick={handleExportTable} className="text-[9px] font-black text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-1.5 uppercase tracking-widest px-3 h-[32px] rounded-lg shadow-sm transition-all"><Download size={11}/> Export</button>
+                  <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2 ml-1">
+                    <button onClick={handleExportExcel} className="text-[9px] font-black text-white bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1.5 uppercase tracking-widest px-3 h-[32px] rounded-lg shadow-md transition-all active:scale-95" title="Export Filtered Data to Excel">
+                      <FileSpreadsheet size={12}/> Excel
+                    </button>
+                    <button onClick={handleExportTable} className="text-[9px] font-black text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 flex items-center gap-1.5 uppercase tracking-widest px-3 h-[32px] rounded-lg shadow-sm transition-all active:scale-95" title="Export Raw Data">
+                      <Download size={11}/> TSV
+                    </button>
+                  </div>
                 </div>
               </div>
 
               <div className="flex-1 overflow-auto custom-scrollbar relative bg-white">
-                <table className="w-full text-left border-collapse min-w-[800px]">
+                <table className="w-full text-left border-collapse min-w-[900px]">
                   <thead className="sticky top-0 z-20 bg-slate-50 shadow-sm border-b border-slate-200">
                     <tr className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
                       <th className="px-5 py-3 w-12 text-center">NO</th>
                       <th className="px-5 py-3 min-w-[250px]">Nama Module</th>
                       <th className="px-4 py-3 text-center">Status</th>
                       <th className="px-4 py-3">Group SBU</th>
+                      <th className="px-4 py-3">HRBP</th>
                       <th className="px-4 py-3 text-center">Skor CCT</th>
-                      <th className="px-5 py-3 text-center">Akses Dokumen</th>
+                      <th className="px-5 py-3 text-center">Akses</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {tableData.map((row: any, idx: number) => (
                       <tr key={idx} className="hover:bg-slate-50 transition-colors group">
                         <td className="px-5 py-2.5 text-[10px] font-bold text-slate-400 text-center">{row['No'] || row['NO'] || '-'}</td>
-                        <td className="px-5 py-2.5"><div className="text-[10px] font-bold text-slate-800 line-clamp-2 uppercase" title={row['Nama Module']}>{row['Nama Module'] || '-'}</div></td>
+                        <td className="px-5 py-2.5"><div className="text-[10px] font-black text-slate-800 line-clamp-2 uppercase" title={row['Nama Module']}>{row['Nama Module'] || '-'}</div></td>
                         <td className="px-4 py-2.5 text-center"><StatusBadge status={row._normStatus} /></td>
                         <td className="px-4 py-2.5 text-[10px] font-bold text-slate-500 uppercase">{row['Group SBU/SFU'] || '-'}</td>
+                        <td className="px-4 py-2.5 text-[10px] font-black text-blue-600 uppercase">{row._hrbp || '-'}</td>
                         <td className="px-4 py-2.5 text-center"><ScoreBadge score={row._score} /></td>
                         <td className="px-5 py-2.5 text-center">
                           <div className="flex items-center justify-center gap-2">
-                            {row._linkNew ? <a href={row._linkNew} target="_blank" rel="noreferrer" className="p-1.5 bg-blue-50 text-blue-600 rounded-md border border-blue-100 transition-colors hover:bg-blue-600 hover:text-white"><ExternalLink size={12} /></a> : <div className="p-1.5 bg-slate-50 text-slate-300 rounded-md border border-slate-100 cursor-not-allowed"><ExternalLink size={12} /></div>}
-                            {row._linkOld ? <a href={row._linkOld} target="_blank" rel="noreferrer" className="p-1.5 bg-slate-50 text-slate-500 rounded-md border border-slate-200 transition-colors hover:bg-slate-600 hover:text-white"><History size={12} /></a> : <div className="p-1.5 bg-slate-50 text-slate-300 rounded-md border border-slate-100 cursor-not-allowed"><History size={12} /></div>}
+                            {row._linkNew ? <a href={row._linkNew} target="_blank" rel="noreferrer" className="p-1.5 bg-blue-50 text-blue-600 rounded-lg border border-blue-100 transition-all hover:bg-blue-600 hover:text-white"><ExternalLink size={12} /></a> : <div className="p-1.5 bg-slate-50 text-slate-300 rounded-lg border border-slate-100 cursor-not-allowed"><ExternalLink size={12} /></div>}
+                            {row._linkOld ? <a href={row._linkOld} target="_blank" rel="noreferrer" className="p-1.5 bg-slate-50 text-slate-500 rounded-lg border border-slate-200 transition-all hover:bg-slate-600 hover:text-white"><History size={12} /></a> : <div className="p-1.5 bg-slate-50 text-slate-300 rounded-lg border border-slate-100 cursor-not-allowed"><History size={12} /></div>}
                           </div>
                         </td>
                       </tr>
@@ -615,31 +735,34 @@ export default function App() {
         ) : (
           
           <div className="h-full max-w-4xl mx-auto w-full animate-in fade-in duration-300">
-             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
+             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
                 {!isAuthorized ? (
-                  <div className="flex flex-col items-center justify-center flex-1 text-center bg-slate-50 px-6">
-                     <div className="bg-white p-4 rounded-2xl mb-4 border border-slate-200 shadow-sm"><Lock size={24} className="text-slate-400" /></div>
-                     <h2 className="text-lg font-black text-slate-800 mb-1">Access Locked</h2>
-                     <p className="text-[10px] font-bold text-slate-400 mb-6 uppercase tracking-widest">Administrator Credentials Required</p>
+                  <div className="flex flex-col items-center justify-center flex-1 text-center bg-slate-50/30 px-6">
+                     <div className="bg-white p-5 rounded-2xl mb-4 border border-slate-200 shadow-sm"><Lock size={28} className="text-slate-400" /></div>
+                     <h2 className="text-lg font-black text-slate-800 mb-1 tracking-tight">Access Management Locked</h2>
+                     <p className="text-[10px] font-bold text-slate-400 mb-6 uppercase tracking-[0.2em]">Authorized Personnel Only</p>
                      <div className="flex w-full max-w-xs gap-2">
                         <div className="relative flex-1">
-                           <input type={showPassword ? 'text' : 'password'} value={passwordInput} onChange={(e: any) => setPasswordInput(e.target.value)} onKeyDown={(e: any) => { if(e.key === 'Enter') { if (passwordInput === 'MeratusAcademy') setIsAuthorized(true); else alert("Incorrect Password!"); } }} placeholder="Enter Password..." className="w-full h-[38px] bg-white border border-slate-300 px-3 rounded-lg text-[11px] font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none pr-8" />
-                           <button onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1">{showPassword ? <EyeOff size={13} /> : <Eye size={13} />}</button>
+                           <input type={showPassword ? 'text' : 'password'} value={passwordInput} onChange={(e: any) => setPasswordInput(e.target.value)} onKeyDown={(e: any) => { if(e.key === 'Enter') { if (passwordInput === 'MeratusAcademy') setIsAuthorized(true); else alert("Incorrect Password!"); } }} placeholder="Enter Password..." className="w-full h-[38px] bg-white border border-slate-300 px-3 rounded-lg text-[11px] font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none pr-8 shadow-inner" />
+                           <button onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1">{showPassword ? <EyeOff size={14} /> : <Eye size={14} />}</button>
                         </div>
                         <button onClick={() => { if(passwordInput === 'MeratusAcademy') setIsAuthorized(true); else alert("Incorrect Password!"); }} className="bg-blue-600 hover:bg-blue-700 text-white px-5 h-[38px] rounded-lg text-[10px] font-black uppercase shadow-md transition-all active:scale-95">Unlock</button>
                      </div>
                   </div>
                 ) : (
                   <>
-                    <div className="px-5 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+                    <div className="px-5 py-3 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
                        <div className="flex items-center gap-2.5">
-                         <div className="bg-indigo-100 p-1.5 rounded-lg text-indigo-600"><FileSpreadsheet size={14} /></div>
-                         <div><h2 className="text-[11px] font-black text-slate-800 uppercase tracking-tight">Data Source (TSV)</h2><p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">TSV Format required</p></div>
+                         <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><FileSpreadsheet size={16} /></div>
+                         <div><h2 className="text-[11px] font-black text-slate-800 uppercase tracking-tight leading-none">Global Data Source (TSV)</h2><p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1">Raw Tab-Separated Values Engine</p></div>
                        </div>
-                       <button onClick={handleSaveToCloud} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white px-4 h-[32px] rounded-lg text-[9px] font-black uppercase shadow-md transition-all flex items-center gap-1.5 disabled:opacity-70 active:scale-95">{isSaving ? <RefreshCw className="animate-spin" size={11} /> : <Save size={11} />} {isSaving ? 'Saving...' : 'Save Data'}</button>
+                       <div className="flex gap-2">
+                          <button onClick={() => setIsAuthorized(false)} className="px-3 h-[32px] rounded-lg text-[9px] font-black uppercase border border-slate-200 hover:bg-slate-50 transition-colors">Lock</button>
+                          <button onClick={handleSaveToCloud} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white px-4 h-[32px] rounded-lg text-[9px] font-black uppercase shadow-md transition-all flex items-center gap-2 disabled:opacity-70 active:scale-95">{isSaving ? <RefreshCw className="animate-spin" size={11} /> : <Save size={11} />} {isSaving ? 'Syncing...' : 'Sync to Cloud'}</button>
+                       </div>
                     </div>
-                    <div className="p-3 bg-slate-50 flex-1 flex min-h-0">
-                      <textarea value={rawData} onChange={(e: any) => setRawData(e.target.value)} className="w-full h-full bg-white border border-slate-300 shadow-inner rounded-lg p-3 text-[9px] leading-relaxed font-mono text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none resize-none custom-scrollbar whitespace-pre" spellCheck="false"></textarea>
+                    <div className="p-4 bg-slate-100/50 flex-1 flex min-h-0">
+                      <textarea value={rawData} onChange={(e: any) => setRawData(e.target.value)} className="w-full h-full bg-white border border-slate-200 shadow-inner rounded-xl p-4 text-[10px] leading-relaxed font-mono text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none resize-none custom-scrollbar whitespace-pre" spellCheck="false" placeholder="Paste your TSV data here..."></textarea>
                     </div>
                   </>
                 )}
@@ -652,6 +775,7 @@ export default function App() {
         .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         @media print {
