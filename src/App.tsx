@@ -12,7 +12,6 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   Filter,
-  BarChart3,
   Lock,
   TableProperties,
   Check,
@@ -22,9 +21,6 @@ import {
   ShieldCheck,
   ExternalLink,
   History,
-  Star,
-  Award,
-  TrendingUp,
   Activity,
   Eye,
   EyeOff,
@@ -53,8 +49,8 @@ getAnalytics(app);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const DEFAULT_TSV = `No	Nama Module	Status	Group SBU/SFU	Skor CCT	Link Terbaru	Link File Lama
-1	Contoh Module Dummy	New	Asset & Charter	8.5	https://example.com/new	https://example.com/old`;
+const DEFAULT_TSV = `No	Nama Module	Status	Group SBU/SFU	Link Terbaru	Link File Lama
+1	Contoh Module Dummy	New	Asset & Charter	https://example.com/new	https://example.com/old`;
 
 // HRBP MAPPING LOGIC
 const getHRBP = (sbu: string) => {
@@ -209,9 +205,9 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  const { value: searchFilter, setValue: setSearchFilter } = useFilterDropdown("");
-  const { value: sbuFilter, setValue: setSbuFilter } = useFilterDropdown("");
-  const { value: hrbpFilter, setValue: setHrbpFilter } = useFilterDropdown("");
+  const { value: searchFilter, setSearchFilter } = useFilterDropdown("");
+  const { value: sbuFilter, setSbuFilter } = useFilterDropdown("");
+  const { value: hrbpFilter, setHrbpFilter } = useFilterDropdown("");
 
   // FIREBASE INIT
   useEffect(() => {
@@ -271,8 +267,6 @@ export default function App() {
       else if (rawStatus.includes('diperbarui') || rawStatus.includes('updated')) obj._normStatus = 'Updated';
       else obj._normStatus = 'Unchanged';
 
-      const parsedScore = parseFloat(obj['Skor CCT']);
-      obj._score = isNaN(parsedScore) ? null : parsedScore;
       obj._linkNew = obj['Link Terbaru'] || null;
       obj._linkOld = obj['Link File Lama'] || null;
       obj._order = parseInt(obj['No'] || obj['NO']) || 0;
@@ -306,13 +300,10 @@ export default function App() {
     const data = globallyFilteredData;
     let newCount = 0, updatedCount = 0, unchangedCount = 0;
     const sbuMap: Record<string, any> = {};
-    let totalScore = 0;
-    let scoreCount = 0;
-    let topScoredModules: any[] = [];
 
     data.forEach((d: any) => {
       const sbu = d['Group SBU/SFU'] || 'Unknown SBU';
-      if (!sbuMap[sbu]) sbuMap[sbu] = { name: sbu, total: 0, new: 0, updated: 0, scoreSum: 0, scoreCount: 0, hrbp: d._hrbp };
+      if (!sbuMap[sbu]) sbuMap[sbu] = { name: sbu, total: 0, new: 0, updated: 0, hrbp: d._hrbp };
       sbuMap[sbu].total += 1;
 
       if (d._normStatus === 'New') {
@@ -324,31 +315,19 @@ export default function App() {
       } else {
         unchangedCount++;
       }
-
-      if (d._score !== null) {
-        totalScore += d._score;
-        scoreCount++;
-        sbuMap[sbu].scoreSum += d._score;
-        sbuMap[sbu].scoreCount += 1;
-        topScoredModules.push(d);
-      }
     });
     
     const sbuSummary = Object.values(sbuMap)
       .map((s: any) => ({
         ...s,
-        activityScore: s.new * 2 + s.updated,
-        avgScore: s.scoreCount > 0 ? (s.scoreSum / s.scoreCount).toFixed(2) : '-'
+        activityScore: s.new * 2 + s.updated
       }))
       .sort((a: any, b: any) => b.activityScore - a.activityScore);
 
     const updateRate = data.length > 0 ? (((newCount + updatedCount) / data.length) * 100).toFixed(1) : 0;
-    const avgGlobalScore = scoreCount > 0 ? (totalScore / scoreCount).toFixed(2) : 0;
-    topScoredModules.sort((a: any, b: any) => b._score - a._score);
 
     return {
-      total: data.length, newCount, updatedCount, unchangedCount, updateRate, avgGlobalScore,
-      sbuSummary, topScoredModules: topScoredModules.slice(0, 15) // Get up to 15 for top score
+      total: data.length, newCount, updatedCount, unchangedCount, updateRate, sbuSummary
     };
   }, [globallyFilteredData]);
 
@@ -369,8 +348,6 @@ export default function App() {
     if (sortOrder === 'default') baseData = [...baseData].sort((a: any, b: any) => a._order - b._order);
     else if (sortOrder === 'az') baseData = [...baseData].sort((a: any, b: any) => (a['Nama Module'] || '').localeCompare(b['Nama Module'] || ''));
     else if (sortOrder === 'za') baseData = [...baseData].sort((a: any, b: any) => (b['Nama Module'] || '').localeCompare(a['Nama Module'] || ''));
-    else if (sortOrder === 'score_high') baseData = [...baseData].sort((a: any, b: any) => (b._score || 0) - (a._score || 0));
-    else if (sortOrder === 'score_low') baseData = [...baseData].sort((a: any, b: any) => (a._score || 100) - (b._score || 100));
     return baseData;
   }, [globallyFilteredData, moduleView, statusFilters, sortOrder]);
 
@@ -401,19 +378,16 @@ export default function App() {
   };
 
   const handleExportTable = () => {
-    // Export raw TSV data
     const b = new Blob([rawData], { type: 'text/tsv' }); 
     const u = URL.createObjectURL(b); 
     const a = document.createElement('a'); a.href = u; a.download = 'CCT_Module_Tracker_Raw.tsv'; a.click();
   };
 
   const handleExportExcel = () => {
-    // Export filtered Table Data to CSV (for Excel)
     if (tableData.length === 0) return;
     
-    const headers = ['No', 'Nama Module', 'Status', 'Group SBU/SFU', 'HRBP', 'Skor CCT', 'Link Terbaru', 'Link File Lama'];
+    const headers = ['No', 'Nama Module', 'Status', 'Group SBU/SFU', 'HRBP', 'Link Terbaru', 'Link File Lama'];
     
-    // Helper to safely escape CSV values
     const escapeCSV = (val: any) => {
       if (val === null || val === undefined) return '""';
       const str = String(val);
@@ -429,7 +403,6 @@ export default function App() {
         escapeCSV(row._normStatus),
         escapeCSV(row['Group SBU/SFU']),
         escapeCSV(row._hrbp),
-        escapeCSV(row._score),
         escapeCSV(row._linkNew),
         escapeCSV(row._linkOld)
       ];
@@ -437,7 +410,6 @@ export default function App() {
     });
 
     const csvString = csvRows.join('\n');
-    // Add BOM (\ufeff) so Excel correctly recognizes UTF-8 characters
     const blob = new Blob(["\ufeff" + csvString], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -459,16 +431,6 @@ export default function App() {
         {status === 'Updated' && <FileEdit size={10} />}
         {status === 'Unchanged' && <CheckCircle2 size={10} />}
         {status.toUpperCase()}
-      </span>
-    );
-  };
-
-  const ScoreBadge = ({ score }: any) => {
-    if (score === null) return <span className="text-slate-400 font-bold">-</span>;
-    const isPass = score >= 8.0;
-    return (
-      <span className={`inline-flex items-center justify-center px-2 py-1 rounded text-xs font-black min-w-[36px] border ${isPass ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
-        {score.toFixed(1)}
       </span>
     );
   };
@@ -510,7 +472,7 @@ export default function App() {
         </div>
       </nav>
 
-      {/* FILTER BAR - NOW INCLUDES HRBP */}
+      {/* FILTER BAR */}
       {(activeTab === 'dashboard' || activeTab === 'modules') && (
         <div className="h-[44px] bg-white border-b border-slate-100 flex-shrink-0 z-40 shadow-sm">
            <div className="h-full w-full px-4 flex items-center gap-3 overflow-x-auto no-scrollbar">
@@ -538,127 +500,77 @@ export default function App() {
           <div className="h-full flex flex-col items-center justify-center text-slate-400"><RefreshCw className="h-8 w-8 animate-spin mb-3 text-blue-500" /><p className="font-bold text-[10px] tracking-widest uppercase animate-pulse">Synchronizing Data...</p></div>
         ) : activeTab === 'dashboard' ? (
           
-          <div className="h-full flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <div className="h-full flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
             
-            {/* Top Stat Cards - Premium Look */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 shrink-0">
+            {/* Top Stat Cards - Compact View */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0">
               {[
                 { label: 'Total Modules', val: metrics.total, color: 'blue', icon: BookOpen },
                 { label: 'New Arrival', val: metrics.newCount, color: 'emerald', icon: FilePlus2 },
                 { label: 'Updates', val: metrics.updatedCount, color: 'indigo', icon: FileEdit },
-                { label: 'Update Rate', val: `${metrics.updateRate}%`, color: 'sky', icon: Activity },
-                { label: 'Avg old CCT Score', val: metrics.avgGlobalScore, color: 'amber', icon: TrendingUp }
+                { label: 'Update Rate', val: `${metrics.updateRate}%`, color: 'sky', icon: Activity }
               ].map((card, i) => (
-                <div key={i} className={`bg-white p-3 rounded-2xl border-l-4 border-l-${card.color}-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[72px] relative overflow-hidden group hover:shadow-md transition-all`}>
+                <div key={i} className={`bg-white p-3 rounded-2xl border-l-4 border-l-${card.color}-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[64px] relative overflow-hidden group hover:shadow-md transition-all`}>
                   <div className="flex justify-between items-start z-10">
                     <h3 className={`text-[9px] font-black text-${card.color}-600 uppercase tracking-widest`}>{card.label}</h3>
                     <card.icon size={12} className={`text-${card.color}-500 opacity-60`} />
                   </div>
-                  <div className="text-2xl font-black text-slate-800 tracking-tighter leading-none z-10">{card.val}</div>
-                  <div className={`absolute -right-2 -bottom-2 opacity-[0.03] group-hover:scale-110 transition-transform`}><card.icon size={50} /></div>
+                  <div className="text-xl font-black text-slate-800 tracking-tighter leading-none z-10 mt-1">{card.val}</div>
+                  <div className={`absolute -right-2 -bottom-2 opacity-[0.03] group-hover:scale-110 transition-transform`}><card.icon size={45} /></div>
                 </div>
               ))}
             </div>
 
-            {/* Split Content: SBU Grid vs Top Score */}
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-4 min-h-0">
-              
-              {/* Left Column: Premium SBU Summary */}
-              <div className="md:col-span-8 bg-white rounded-2xl border border-slate-200 flex flex-col min-h-0 shadow-sm overflow-hidden">
-                <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between bg-white shrink-0">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="text-blue-500" size={16} />
-                    <h2 className="text-[12px] font-black text-slate-800 uppercase tracking-widest">SBU / SFU Progress Tracking</h2>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> NEW</span>
-                    <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> UPDATED</span>
-                  </div>
+            {/* SBU Tracking Grid (Full Width, No Scroll Optimised) */}
+            <div className="flex-1 bg-white rounded-2xl border border-slate-200 flex flex-col min-h-0 shadow-sm overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-slate-200 flex items-center justify-between bg-white shrink-0">
+                <div className="flex items-center gap-2">
+                  <Building2 className="text-blue-500" size={14} />
+                  <h2 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">SBU / SFU Progress Tracking</h2>
                 </div>
-                
-                {/* Scrollable Grid Area */}
-                <div className="p-4 flex-1 overflow-y-auto custom-scrollbar bg-slate-50/50">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {metrics.sbuSummary.map((sbu: any, idx: number) => (
-                      <div key={idx} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2 hover:border-blue-300 hover:shadow-md transition-all">
-                        
-                        {/* Header: SBU Name & Score */}
-                        <div className="flex justify-between items-start gap-2">
-                          <div className="min-w-0 flex-1">
-                            <span className="text-[11px] font-black text-slate-800 truncate block uppercase leading-tight" title={sbu.name}>{sbu.name}</span>
-                          </div>
-                          <div className="flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
-                             <Star size={9} className="text-amber-500 fill-amber-500" />
-                             <span className="text-[10px] font-black text-amber-700">{sbu.avgScore}</span>
-                          </div>
-                        </div>
-                        
-                        {/* Detail: Total Modules & HRBP */}
-                        <div className="flex flex-col gap-0.5">
-                           <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{sbu.total} Total Modules</span>
-                           <span className="text-[8px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-1"><Users size={9} /> HRBP: {sbu.hrbp}</span>
-                        </div>
-                        
-                        {/* Progress Details */}
-                        <div className="flex flex-col gap-1.5 mt-1">
-                          <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-widest">
-                            <span className="text-emerald-600">New: {sbu.new}</span>
-                            <span className="text-blue-600">Update: {sbu.updated}</span>
-                          </div>
-                          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden flex shadow-inner">
-                            <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-full" style={{ width: `${(sbu.new / sbu.total) * 100}%` }}></div>
-                            <div className="bg-gradient-to-r from-blue-400 to-blue-500 h-full" style={{ width: `${(sbu.updated / sbu.total) * 100}%` }}></div>
-                          </div>
-                        </div>
-
-                      </div>
-                    ))}
-                    {metrics.sbuSummary.length === 0 && (
-                      <div className="col-span-full text-center py-8 text-xs text-slate-400 font-bold uppercase tracking-widest">No data matching current filters.</div>
-                    )}
-                  </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> NEW</span>
+                  <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> UPDATED</span>
                 </div>
               </div>
-
-              {/* Right Column: Premium Hall of Fame */}
-              <div className="md:col-span-4 bg-white rounded-2xl border border-slate-200 flex flex-col min-h-0 shadow-sm overflow-hidden">
-                <div className="px-5 py-3 border-b border-slate-200 flex items-center gap-2 bg-white shrink-0">
-                  <Award className="text-amber-500" size={16} />
-                  <h2 className="text-[12px] font-black text-slate-800 uppercase tracking-widest">Hall of Fame</h2>
-                </div>
-                <div className="p-0 flex-1 overflow-y-auto custom-scrollbar divide-y divide-slate-100">
-                  {metrics.topScoredModules.map((mod: any, idx: number) => (
-                    <div key={idx} className="px-5 py-3 hover:bg-slate-50 flex items-center gap-3.5 transition-colors group">
+              
+              <div className="p-3 flex-1 overflow-y-auto custom-scrollbar bg-slate-50/50">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                  {metrics.sbuSummary.map((sbu: any, idx: number) => (
+                    <div key={idx} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1.5 hover:border-blue-300 hover:shadow-md transition-all">
                       
-                      {/* Rank Badge */}
-                      <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 border-2 shadow-sm ${idx < 3 ? 'bg-amber-50 border-amber-300 text-amber-600' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
-                        <span className="text-[11px] font-black">{idx + 1}</span>
-                      </div>
-                      
-                      {/* Text Detail */}
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-[10px] font-black text-slate-800 leading-tight truncate uppercase group-hover:text-blue-600 transition-colors" title={mod['Nama Module']}>{mod['Nama Module']}</h4>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest truncate">{mod['Group SBU/SFU']}</p>
+                      {/* Header: SBU Name */}
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] font-black text-slate-800 truncate block uppercase leading-tight" title={sbu.name}>{sbu.name}</span>
                         </div>
                       </div>
                       
-                      {/* Score Highlight */}
-                      <div className="flex flex-col items-end shrink-0">
-                        <span className="text-[13px] font-black text-blue-600 leading-none">{mod._score}</span>
-                        <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Points</span>
+                      {/* Detail: Total Modules & HRBP */}
+                      <div className="flex justify-between items-center mt-1">
+                         <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{sbu.total} Total</span>
+                         <span className="text-[8px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-widest flex items-center gap-1"><Users size={8} /> {sbu.hrbp}</span>
                       </div>
+                      
+                      {/* Progress Details */}
+                      <div className="flex flex-col gap-1 mt-1">
+                        <div className="flex items-center justify-between text-[8px] font-black uppercase tracking-widest">
+                          <span className="text-emerald-600">New: {sbu.new}</span>
+                          <span className="text-blue-600">Update: {sbu.updated}</span>
+                        </div>
+                        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex shadow-inner">
+                          <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-full" style={{ width: `${(sbu.new / sbu.total) * 100}%` }}></div>
+                          <div className="bg-gradient-to-r from-blue-400 to-blue-500 h-full" style={{ width: `${(sbu.updated / sbu.total) * 100}%` }}></div>
+                        </div>
+                      </div>
+
                     </div>
                   ))}
-                  {metrics.topScoredModules.length === 0 && (
-                    <div className="p-8 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest">No scored modules yet.</div>
+                  {metrics.sbuSummary.length === 0 && (
+                    <div className="col-span-full text-center py-8 text-xs text-slate-400 font-bold uppercase tracking-widest">No data matching current filters.</div>
                   )}
                 </div>
-                <div className="px-5 py-2.5 bg-slate-50 border-t border-slate-200 shrink-0">
-                   <p className="text-[8px] text-center font-bold text-slate-400 uppercase tracking-[0.25em]">Top 15 Quality Benchmarking</p>
-                </div>
               </div>
-
             </div>
           </div>
 
@@ -682,8 +594,8 @@ export default function App() {
                   <MultiSelectDropdown label="Status" options={[{id: 'all', label: 'All'},{id: 'new', label: 'New'},{id: 'updated', label: 'Updated'},{id: 'unchanged', label: 'Unchanged'}]} selectedValues={statusFilters} onToggle={(id: string) => handleToggleFilter(id, statusFilters, setStatusFilters)} />
                   <select value={sortOrder} onChange={(e: any) => setSortOrder(e.target.value)} className="bg-white border border-slate-300 text-slate-700 text-[9px] font-black uppercase rounded-lg px-2 h-[32px] outline-none shadow-sm">
                     <option value="default">Default Sort</option>
-                    <option value="score_high">High Score</option>
                     <option value="az">A-Z Name</option>
+                    <option value="za">Z-A Name</option>
                   </select>
                   <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2 ml-1">
                     <button onClick={handleExportExcel} className="text-[9px] font-black text-white bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1.5 uppercase tracking-widest px-3 h-[32px] rounded-lg shadow-md transition-all active:scale-95" title="Export Filtered Data to Excel">
@@ -705,7 +617,6 @@ export default function App() {
                       <th className="px-4 py-3 text-center">Status</th>
                       <th className="px-4 py-3">Group SBU</th>
                       <th className="px-4 py-3">HRBP</th>
-                      <th className="px-4 py-3 text-center">Skor CCT</th>
                       <th className="px-5 py-3 text-center">Akses</th>
                     </tr>
                   </thead>
@@ -717,7 +628,6 @@ export default function App() {
                         <td className="px-4 py-2.5 text-center"><StatusBadge status={row._normStatus} /></td>
                         <td className="px-4 py-2.5 text-[10px] font-bold text-slate-500 uppercase">{row['Group SBU/SFU'] || '-'}</td>
                         <td className="px-4 py-2.5 text-[10px] font-black text-blue-600 uppercase">{row._hrbp || '-'}</td>
-                        <td className="px-4 py-2.5 text-center"><ScoreBadge score={row._score} /></td>
                         <td className="px-5 py-2.5 text-center">
                           <div className="flex items-center justify-center gap-2">
                             {row._linkNew ? <a href={row._linkNew} target="_blank" rel="noreferrer" className="p-1.5 bg-blue-50 text-blue-600 rounded-lg border border-blue-100 transition-all hover:bg-blue-600 hover:text-white"><ExternalLink size={12} /></a> : <div className="p-1.5 bg-slate-50 text-slate-300 rounded-lg border border-slate-100 cursor-not-allowed"><ExternalLink size={12} /></div>}
