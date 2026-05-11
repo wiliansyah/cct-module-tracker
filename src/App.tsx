@@ -507,8 +507,8 @@ export default function App() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0">
               {[
                 { label: 'Total Modules', val: metrics.total, color: 'blue', icon: BookOpen },
-                { label: 'New Arrival', val: metrics.newCount, color: 'emerald', icon: FilePlus2 },
-                { label: 'Updates', val: metrics.updatedCount, color: 'indigo', icon: FileEdit },
+                { label: 'New Module', val: metrics.newCount, color: 'emerald', icon: FilePlus2 },
+                { label: 'Module Updated', val: metrics.updatedCount, color: 'indigo', icon: FileEdit },
                 { label: 'Update Rate', val: `${metrics.updateRate}%`, color: 'sky', icon: Activity }
               ].map((card, i) => (
                 <div key={i} className={`bg-white p-3 rounded-2xl border-l-4 border-l-${card.color}-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[64px] relative overflow-hidden group hover:shadow-md transition-all`}>
