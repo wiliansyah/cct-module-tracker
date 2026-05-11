@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, 
   Upload, 
@@ -47,7 +47,7 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+getAnalytics(app); // Initialize analytics without assigning to an unused variable
 const auth = getAuth(app);
 const db = getFirestore(app);
 
@@ -203,6 +203,7 @@ export default function App() {
       try {
         await signInAnonymously(auth);
       } catch (err: any) { 
+        console.error("Firebase Auth Error:", err); // Log the error to avoid TS6133
         setSyncError("Auth Fail. Enable Anonymous Auth in Firebase."); 
         setIsLoadingData(false);
       }
@@ -231,6 +232,7 @@ export default function App() {
       setIsLoadingData(false);
       setSyncError(null);
     }, (err: any) => {
+      console.error("Firestore Sync Error:", err); // Log the error to avoid TS6133
       setSyncError("Sync Fail. Check Firestore Rules.");
       setIsLoadingData(false);
     });
@@ -416,7 +418,10 @@ export default function App() {
       const docRef = doc(db, 'dashboard', 'module_tracker_data_v2');
       await setDoc(docRef, { tsvData: rawData, updatedAt: new Date().toISOString(), updatedBy: user.uid });
       setActiveTab('dashboard');
-    } catch (e: any) { setSyncError("Save Failed. Check Firestore Rules."); }
+    } catch (e: any) { 
+      console.error("Save Document Error:", e); // Log the error to avoid TS6133
+      setSyncError("Save Failed. Check Firestore Rules."); 
+    }
     finally { setIsSaving(false); }
   };
 
