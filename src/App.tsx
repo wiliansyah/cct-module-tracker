@@ -894,7 +894,7 @@ export default function App() {
 
   const clearAllFilters = () => { setSearchFilter(""); setSbuFilter(""); setHrbpFilter(""); };
 
-  const handleCellEdit = (originalIndex: number, headerFallback: string, newValue: string) => {
+  const handleCellEdit = async (originalIndex: number, headerFallback: string, newValue: string) => {
     const lines = rawData.split(/\r?\n/);
     if (!lines[0]) return;
     const headers = lines[0].split('\t').map((h: string) => h.trim());
@@ -922,6 +922,19 @@ export default function App() {
     
     const newRawData = lines.join('\n');
     setRawData(newRawData);
+
+    if (user) {
+      setIsSaving(true);
+      try {
+        const docRef = doc(db, 'dashboard', 'module_tracker_data_v2');
+        await setDoc(docRef, { tsvData: newRawData, updatedAt: new Date().toISOString(), updatedBy: user.uid });
+      } catch (e: any) { 
+        console.error("Auto-Save Document Error:", e);
+        setSyncError("Auto-Save Failed"); 
+      } finally {
+        setIsSaving(false);
+      }
+    }
   };
 
   const StatusBadge = ({ status }: any) => {
