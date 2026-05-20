@@ -49,8 +49,416 @@ getAnalytics(app);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const DEFAULT_TSV = `No	Nama Module	Status	Group SBU/SFU	Link Terbaru	Link File Lama
-1	Contoh Module Dummy	Updated	Asset & Charter	https://example.com/new	https://example.com/old`;
+const DEFAULT_TSV = `No\tNama Module\tStatus\tGroup SBU/SFU\tLink Terbaru\tLink File Lama
+1\tAction Tracker 2023\tUnchanged\t\t\t
+2\tAI Workshop - AI Implementation & Use Cases\tUnchanged\t\t\t
+3\tAI Workshop - Understanding the AI Landscape 2024\tUnchanged\t\t\t
+4\tAsset & Charter - Basic Understanding Marine Insurance\tUnchanged\t\t\t
+5\tAsset & Charter - Chartering Operations\tUnchanged\t\t\t
+6\tAsset & Charter - Digital Inspection and Documentation Software\tUnchanged\t\t\t
+7\tAsset & Charter - IMO Regulation: SOLAS\tUnchanged\t\t\t
+8\tAsset & Charter - Inspeksi QSHE Alat Berat Depo\tUnchanged\t\t\t
+9\tAsset & Charter - Inspeksi QSHE Alat Berat Terminal\tUnchanged\t\t\t
+10\tAsset & Charter - Inspeksi QSHE Operational Trucking MJT\tUnchanged\t\t\t
+11\tAsset & Charter - Inspeksi QSHE Repair Container\tUnchanged\t\t\t
+12\tAsset & Charter - Inspeksi QSHE Warehouse\tUnchanged\t\t\t
+13\tAsset & Charter - Introduction to Asset & Charter Business\tUnchanged\t\t\t
+14\tAsset & Charter - Introduction to Chartering\tUnchanged\t\t\t
+15\tAsset & Charter - ISO 9001:2015\tUnchanged\t\t\t
+16\tAsset & Charter - Lifting Cargoes on Flat Rack Container\tUnchanged\t\t\t
+17\tAsset & Charter - Non Vessel Asset Management (Truck & Trailer)\tUnchanged\t\t\t
+18\tAsset & Charter - Non Vessel: Risk Classification & Measurement\tUnchanged\t\t\t
+19\tAsset & Charter - Pemahaman SMS melalui QSHE Barriers\tUnchanged\t\t\t
+20\tAsset & Charter - Standar Pedoman Implementasi QSHE Non Vessel\tUnchanged\t\t\t
+21\tAsset Charter: IMO Regulation - Marine Pollution (MARPOL)\tUnchanged\t\t\t
+22\tBA - Asset & Charter: Introduction to QSHE Meratus\tUnchanged\t\t\t
+23\tBA - CLC: Container Repair Process\tUnchanged\t\t\t
+24\tBA - CLC: MLO Depot Business & Marketing Strategy\tUnchanged\t\t\t
+25\tBA - CLC: Receiving Delivery and Stuffing Stripping Process at Depo\tUnchanged\t\t\t
+26\tBA - Liner: Basic Container\tUnchanged\t\t\t
+27\tBA - Liner: Basic Knowledge Terminal Operation\tUnchanged\t\t\t
+28\tBA - Liner: Introduction to MFEC\tUnchanged\t\t\t
+29\tBA - Liner: Product Knowledge Meratus Liner\tUnchanged\t\t\t
+30\tBA - Liner: Service Excellence\tUnchanged\t\t\t
+31\tBA - Liner: Term of Shipment\tUnchanged\t\t\t
+32\tBA - Logistics: Basic Knowledge Reefer\tUnchanged\t\t\t
+33\tBA - Logistics: Customs Clearance\tUnchanged\t\t\t
+34\tBA - Logistics: Sea Freight Domestic\tUnchanged\t\t\t
+35\tBA - Logistics: Warehouse & Transport\tUnchanged\t\t\t
+36\tBA - MSM: Introduction to Ship Management\tUnchanged\t\t\t
+37\tBA - MTM: Heavy Equipment Maintenance\tUnchanged\t\t\t
+38\tBasic CLC - Terminal : Basic Knowledge Business Process CLC & Terminal\tUnchanged\t\t\t
+39\tBasic CLC : Depo Management\tUnchanged\t\t\t
+40\tBasic CLC : Heavy Equipment\tUnchanged\t\t\t
+41\tBasic CLC : Pengetahuan Bongkar Muat\tUnchanged\t\t\t
+42\tBasic CLC : Repair Container\tUnchanged\t\t\t
+43\tBasic CLC: Penyerahan dan Penerimaan Kontainer\tUnchanged\t\t\t
+44\tBasic English - 16 Basic Tenses\tUnchanged\t\t\t
+45\tBasic English - Email Writing\tUnchanged\t\t\t
+46\tBasic English - Negotiation Skills\tUnchanged\t\t\t
+47\tBasic English - Preposition of Time\tUnchanged\t\t\t
+48\tBasic English - Presentation Skills\tUnchanged\t\t\t
+49\tBasic Excel Function\tUnchanged\t\t\t
+50\tBasic Logistic : HS Code dan Kepabeanan\tUnchanged\t\t\t
+51\tBasic Logistic : Reefer Container Handling\tUnchanged\t\t\t
+52\tBasic Logistics - Commercial : Account Plan\tUnchanged\t\t\t
+53\tBasic Logistics - Commercial : Basic Agency & International Service\tUnchanged\t\t\t
+54\tBasic Logistics - Commercial : Incoterms Logistics\tUnchanged\t\t\t
+55\tBasic Logistics - Commercial : Sales Skills\tUnchanged\t\t\t
+56\tBasic Logistics - Commercial: Exim dan Incoterms\tUnchanged\t\t\t
+57\tBasic Logistics - Operations: Operation Monitoring & System Support\tUnchanged\t\t\t
+58\tBasic Logistics - Operations: SCM Profit\tUnchanged\t\t\t
+59\tBasic Logistics - P3W Sales\tUnchanged\t\t\t
+60\tBasic Logistics : Account Receivable\tUnchanged\t\t\t
+61\tBasic Logistics : Airfreight\tUnchanged\t\t\t
+62\tBasic Logistics : Basic Knowledge Business Process Logistics\tUnchanged\t\t\t
+63\tBasic Logistics : Basic LCL (Less than Container Load)\tUnchanged\t\t\t
+64\tBasic Logistics : Basic Operation\tUnchanged\t\t\t
+65\tBasic Logistics : Custom Clearence\tUnchanged\t\t\t
+66\tBasic Logistics : Customer Service\tUnchanged\t\t\t
+67\tBasic Logistics : Industrial Project\tUnchanged\t\t\t
+68\tBasic Logistics : Pemahaman Klaim & Asuransi\tUnchanged\t\t\t
+69\tBasic Logistics : Quality Management System\tUnchanged\t\t\t
+70\tBasic Logistics : Sea Freight\tUnchanged\t\t\t
+71\tBasic Logistics : Warehouse & Transport\tUnchanged\t\t\t
+72\tBasic Logistics: Vendor Management\tUnchanged\t\t\t
+73\tBasic Operation : 3. Port Info & Ship Particular\tUnchanged\t\t\t
+74\tBasic Operation : 4. Loading & Unloading\tUnchanged\t\t\t
+75\tBasic Operation : 9. IMDG Code\tUnchanged\t\t\t
+76\tBasic Operation: 5. Container Inventory Management\tUnchanged\t\t\t
+77\tBasic Public Speaking Skills\tUnchanged\t\t\t
+78\tBasic Shipping : Basic Knowledge Business Process Shipping (Liner)\tUnchanged\t\t\t
+79\tBPM - Assessment for Digital Transformation\tUnchanged\t\t\t
+80\tBPM - Basic Shipping Induction Inbound and Outbound Process\tUnchanged\t\t\t
+81\tBPM - Business Process Management Framework\tUnchanged\t\t\t
+82\tBPM - Core Model Framework\tUnchanged\t\t\t
+83\tBPM - Management of P3W\tUnchanged\t\t\t
+84\tBPM - Project Management\tUnchanged\t\t\t
+85\tBPM - Work Load Analysis for Project\tUnchanged\t\t\t
+86\tBusiness Control Framework 2024\tUnchanged\t\t\t
+87\tBusiness Negotiation Skill (Malik)\tUnchanged\t\t\t
+88\tBusiness Presentation Skill (Malik)\tUnchanged\t\t\t
+89\tBusiness Process Modelling for Level 10&Above\tUnchanged\t\t\t
+90\tCLC - Backlog Management\tUnchanged\t\t\t
+91\tCLC - Block Diagram pada System Electric\tUnchanged\t\t\t
+92\tCLC - Block Diagram pada System Engine\tUnchanged\t\t\t
+93\tCLC - Block Diagram pada System Hydraulic\tUnchanged\t\t\t
+94\tCLC - Brake System\tUnchanged\t\t\t
+95\tCLC - Cara Menggunakan Common Tool\tUnchanged\t\t\t
+96\tCLC - Daily Maintenance\tUnchanged\t\t\t
+97\tCLC - Differential & Final Drive\tUnchanged\t\t\t
+98\tCLC - Electrical System\tUnchanged\t\t\t
+99\tCLC - Engine System\tUnchanged\t\t\t
+100\tCLC - Failure Analisis Report\tUnchanged\t\t\t
+101\tCLC - Hydraulic System\tUnchanged\t\t\t
+102\tCLC - Hydraulic Troubleshooting\tUnchanged\t\t\t
+103\tCLC - Karakteristik Komponen Elektrik\tUnchanged\t\t\t
+104\tCLC - Karakteristik Komponen Non Elektrik\tUnchanged\t\t\t
+105\tCLC - Maintenance Process\tUnchanged\t\t\t
+106\tCLC - Mekanik Troubleshooting\tUnchanged\t\t\t
+107\tCLC - Nama, Fungsi, & Prinsip Kerja Komponen Engine\tUnchanged\t\t\t
+108\tCLC - Pembacaan Menu pada Monitoring System\tUnchanged\t\t\t
+109\tCLC - Penanganan Claim Container\tUnchanged\t\t\t
+110\tCLC - Pengenalan Fungsi dari Komponen Accesories\tUnchanged\t\t\t
+111\tCLC - Pengenalan Fungsi dari Komponen Electric\tUnchanged\t\t\t
+112\tCLC - Pengenalan Fungsi dari Komponen Hydraulic\tUnchanged\t\t\t
+113\tCLC - Pengenalan Fungsi dari Komponen Power Train\tUnchanged\t\t\t
+114\tCLC - Pengetahuan Forklift\tUnchanged\t\t\t
+115\tCLC - Pengetahuan Reach Stacker\tUnchanged\t\t\t
+116\tCLC - Perencanaan Kebutuhan Alat Mekanis\tUnchanged\t\t\t
+117\tCLC - Perencanaan Lay Out Depo\tUnchanged\t\t\t
+118\tCLC - Pricing Strategy\tUnchanged\t\t\t
+119\tCLC - Setting and Adjustment (Major Component)\tUnchanged\t\t\t
+120\tCLC - Stack Hampar Container\tUnchanged\t\t\t
+121\tCLC - Stuffing Stripping\tUnchanged\t\t\t
+122\tCLC - Teknik Dasar Pengelasan\tUnchanged\t\t\t
+123\tCLC - Teknik Lepas & Pasang Komponen Electric\tUnchanged\t\t\t
+124\tCLC - Teknik Survey & Quality Control\tUnchanged\t\t\t
+125\tCLC - Tyre Management\tUnchanged\t\t\t
+126\tCLC - Upload & Download Program pada Unit\tUnchanged\t\t\t
+127\tCLC - Yard Management system\tUnchanged\t\t\t
+128\tCLC- Penanganan Cargo\tUnchanged\t\t\t
+129\tCode of Conduct\tUnchanged\t\t\t
+130\tCode of Conduct (English Version)\tUnchanged\t\t\t
+131\tCode of Conduct for Manager\tUnchanged\t\t\t
+132\tCompany Profile 2024\tUnchanged\t\t\t
+133\tCompany Regulation 2025-2027 (English Version)\tUnchanged\t\t\t
+134\tCompany Regulation 2025-2027 (Indonesian Version)\tUnchanged\t\t\t
+135\tContract Management System for Level 10&Above\tUnchanged\t\t\t
+136\tControl and Monitoring (Malik)\tUnchanged\t\t\t
+137\tCorp Comm - Branding Development\tUnchanged\t\t\t
+138\tCorp Comm - Communication Campaign\tUnchanged\t\t\t
+139\tCorporate Culture 2025\tUnchanged\t\t\t
+140\tCrewing - Awareness ISO 37001:2016\tUnchanged\t\t\t
+141\tCrewing - Pelatihan Audit Internal ISO 37001:2016\tUnchanged\t\t\t
+142\tEdukasi Pemilahan Sampah\tUnchanged\t\t\t
+143\tEffective Collaboration (Malik)\tUnchanged\t\t\t
+144\tEffective Planning (Malik)\tUnchanged\t\t\t
+145\tFin & Acc - Bills to Invoice\tUnchanged\t\t\t
+146\tFin & Acc - Vendor Invoice Acceptance\tUnchanged\t\t\t
+147\tFraud Awareness\tUnchanged\t\t\t
+148\tGA - Vehicle Maintenance\tUnchanged\t\t\t
+149\tGA - Vehicle Selling\tUnchanged\t\t\t
+150\tGA - Vehicle Usage\tUnchanged\t\t\t
+151\tGood Corporate Governance 2024\tUnchanged\t\t\t
+152\tGroup Policy - Authority Matrix\tUnchanged\t\t\t
+153\tGroup Policy - CAPEX\tUnchanged\t\t\t
+154\tGroup Policy for Level 10&Above\tUnchanged\t\t\t
+155\tHealth Talk - Pencernaan Kuat, Hidup Nikmat\tUnchanged\t\t\t
+156\tHealth Talk: Hari Anak - Ready, Set, School 2024\tUnchanged\t\t\t
+157\tHealth Talk: Virus Monkeypox\tUnchanged\t\t\t
+158\tHMM - Claim Procedure\tUnchanged\t\t\t
+159\tHMM - Stowage & Cargo Overview\tUnchanged\t\t\t
+160\tHow To Create Contract - TPS (HMM)\tUnchanged\t\t\t
+161\tHR - Aspek Normatif Hubungan Industrial\tUnchanged\t\t\t
+162\tHR - Manajemen Remunerasi\tUnchanged\t\t\t
+163\tHR - Manajemen Talenta\tUnchanged\t\t\t
+164\tHR - Melaksanakan Analisa Beban Kerja\tUnchanged\t\t\t
+165\tHR - Membangun Komunikasi Organisasi Yang Efektif\tUnchanged\t\t\t
+166\tHR - Menyusun dan Merancang Kebutuhan Pembelajaran\tUnchanged\t\t\t
+167\tHR - Menyusun Kebutuhan SDM\tUnchanged\t\t\t
+168\tHR - Menyusun Peraturan Perusahaan & Perjanjian Kerja\tUnchanged\t\t\t
+169\tHR - Menyusun Uraian Jabatan\tUnchanged\t\t\t
+170\tHR - Merancang Struktur Organisasi\tUnchanged\t\t\t
+171\tHR - Merumuskan Indikator Kinerja Individu\tUnchanged\t\t\t
+172\tHR - Merumuskan Proses Bisnis dan SOP MSDM\tUnchanged\t\t\t
+173\tHR - Merumuskan Strategi Manajemen SDM\tUnchanged\t\t\t
+174\tHR - Perselisihan Hubungan Industrial\tUnchanged\t\t\t
+175\tHR - Strategic Interviewing\tUnchanged\t\t\t
+176\tInternal Audit - Enterprise Risk Management\tUnchanged\t\t\t
+177\tIntroduction to E-Pact (Employee Self Service)\tUnchanged\t\t\t
+178\tIntroduction to HRIS & Time Management Module PeopleStrong\tUnchanged\t\t\t
+179\tIntroduction to Manager as A Profession\tUnchanged\t\t\t
+180\tIntroduction to Objectives & Key Results 2024\tUnchanged\t\t\t
+181\tIntroduction to PeopleStrong – Learning Module\tUnchanged\t\t\t
+182\tIR Management for Level 10&Above - 2025\tUnchanged\t\t\t
+183\tIT - Agile: Scrum Introduction\tUnchanged\t\t\t
+184\tIT - BitLocker Implementation Security Awareness\tUnchanged\t\t\t
+185\tIT - Cybersecurity Awareness 2023\tUnchanged\t\t\t
+186\tIT - Design System\tUnchanged\t\t\t
+187\tIT - Electronic Data Interchange Introduction\tUnchanged\t\t\t
+188\tIT - Implementation of Cast Software as Software Intelligence\tUnchanged\t\t\t
+189\tIT - Implementing RPA to Support The Business\tUnchanged\t\t\t
+190\tIT - Infrastructure and Application Modernization\tUnchanged\t\t\t
+191\tIT - Introduction to Microsoft Fabric\tUnchanged\t\t\t
+192\tIT - Meratus ACE Support Services\tUnchanged\t\t\t
+193\tIT - Network Operation Center Introduction\tUnchanged\t\t\t
+194\tIT - Personal Data Protection Law: Things You Need to Know\tUnchanged\t\t\t
+195\tIT - Remote Monitoring System for Vessel IoT Solution\tUnchanged\t\t\t
+196\tIT - Secure Access Service Edge (SASE)\tUnchanged\t\t\t
+197\tIT - Test Driven Development Introduction\tUnchanged\t\t\t
+198\tIT - Understanding Security in Development and Operations\tUnchanged\t\t\t
+199\tIT - UX Research\tUnchanged\t\t\t
+200\tIT- Clean Architecture Design Pattern\tUnchanged\t\t\t
+201\tLeaders Talk: Artificial Intelligence\tUnchanged\t\t\t
+202\tLeaders Talk: Create Value Through Integrity - 2024\tUnchanged\t\t\t
+203\tLeaders Talk: Economic Outlook\tUnchanged\t\t\t
+204\tLeaders Talk: Hari Anti Korupsi Sedunia\tUnchanged\t\t\t
+205\tLeaders Talk: Intrapreneurship (Result Oriented)\tUnchanged\t\t\t
+206\tLeaders Talk: Intrapreneurship (Sense of Ownership)\tUnchanged\t\t\t
+207\tLeaders Talk: Kenali Demam Berdarah dan Pencegahannya\tUnchanged\t\t\t
+208\tLeaders Talk: Lesson from Eiger - From Local to the World\tUnchanged\t\t\t
+209\tLeaders Talk: Nutrition Day 2024\tUnchanged\t\t\t
+210\tLeaders Talk: We Aim for Customer Excellence (Collaboration)\tUnchanged\t\t\t
+211\tLeaders Talk: We Put People First (Be A Buddy)\tUnchanged\t\t\t
+212\tLegal - Amendment to Indonesian Shipping Law 101\tUnchanged\t\t\t
+213\tLegal - Implementation of Shipping Law\tUnchanged\t\t\t
+214\tLegal - Indonesia Capital Market\tUnchanged\t\t\t
+215\tLegal - Overview of Indonesia Employment Law\tUnchanged\t\t\t
+216\tLegal - Personal Data Protection\tUnchanged\t\t\t
+217\tLegal - Teknik Merancang Kontrak\tUnchanged\t\t\t
+218\tLiner - Basic Operation : Transshipment\tUnchanged\t\t\t
+219\tLiner Commercial - Basic Shipping : 07. Term of Shipment\tUnchanged\t\t\t
+220\tLiner Commercial - Basic Shipping : 11. Basic Container\tUnchanged\t\t\t
+221\tLiner Commercial - Basic Shipping : 13. Reefer Handling\tUnchanged\t\t\t
+222\tLiner Commercial - Basic Shipping : 14. Breakbulk Cargo & Project\tUnchanged\t\t\t
+223\tLiner Commercial - Basic Shipping : 15. Cost of Failure Branch\tUnchanged\t\t\t
+224\tLiner Commercial - Basic Shipping : 16. Sales Activity & Customer Profile\tUnchanged\t\t\t
+225\tLiner Commercial - Basic Shipping : 2. Product Knowledge and Cargo Shipment\tUnchanged\t\t\t
+226\tLiner Commercial - Basic Shipping : 4.Basic Cargo Knowledge\tUnchanged\t\t\t
+227\tLiner Commercial - Basic Shipping : 6. Bill of Lading\tUnchanged\t\t\t
+228\tLiner Commercial - Basic Shipping : Booking Process\tUnchanged\t\t\t
+229\tLiner Commercial - Basic Shipping: 1.Service Excellence\tUnchanged\t\t\t
+230\tLiner Commercial - Basic Shipping: 10. Liner Services\tUnchanged\t\t\t
+231\tLiner Commercial - Basic Shipping: 12. Dangerous Goods\tUnchanged\t\t\t
+232\tLiner Commercial - Basic Shipping: 3. FAQ for Customer\tUnchanged\t\t\t
+233\tLiner Commercial - Basic Shipping: 8. Terminal Productivity & Operation Pattern\tUnchanged\t\t\t
+234\tLiner Commercial - Basic Shipping: Incoterm 2020\tUnchanged\t\t\t
+235\tLiner Commercial - Basic Shipping: Marine Insurance\tUnchanged\t\t\t
+236\tLiner Commercial - Basic Shipping: Meratus Extra (VAS)\tUnchanged\t\t\t
+237\tLiner Commercial - Basic Shipping: Pengetahuan Kepabeanan dan Exim untuk Pelayaran\tUnchanged\t\t\t
+238\tLiner Commercial - Body Language\tUnchanged\t\t\t
+239\tLiner Commercial - Business Development\tUnchanged\t\t\t
+240\tLiner Commercial - Calculate Rate & Freight\tUnchanged\t\t\t
+241\tLiner Commercial - Customer Contract & Key Account Management\tUnchanged\t\t\t
+242\tLiner Commercial - Decision Making Unit\tUnchanged\t\t\t
+243\tLiner Commercial - Halal Cargo Assurance\tUnchanged\t\t\t
+244\tLiner Commercial - Know Your Customer\tUnchanged\t\t\t
+245\tLiner Commercial - Marine Cargo Insurance\tUnchanged\t\t\t
+246\tLiner Commercial - SOC Business\tUnchanged\t\t\t
+247\tLiner Commercial: Handling Complaint\tUnchanged\t\t\t
+248\tLiner Ops - MFEC: Operational Ship Performance\tUnchanged\t\t\t
+249\tLiner Ops - Ship Stability\tUnchanged\t\t\t
+250\tLiner Ops - Voyage Proforma & Scheduling Introduction\tUnchanged\t\t\t
+251\tLiner Trade - 01. Route Profitability\tUnchanged\t\t\t
+252\tLiner Trade - Annual Budgeting\tUnchanged\t\t\t
+253\tLiner Trade - Contribution Margin Engine, Time Charter Equivalent, and VOE\tUnchanged\t\t\t
+254\tLiner Trade - Customer Segmentation\tUnchanged\t\t\t
+255\tLiner Trade - Joint Slot 2024\tUnchanged\t\t\t
+256\tLiner Trade - Slot Cost\tUnchanged\t\t\t
+257\tLiner Trade - Tier Pricing\tUnchanged\t\t\t
+258\tLogistics - Cargo & Document Handling\tUnchanged\t\t\t
+259\tLogistics - Claim and Insurance\tUnchanged\t\t\t
+260\tLogistics - ISO License Audit Process\tUnchanged\t\t\t
+261\tLogistics - Penerapan SJPH dan Penyelia Halal\tUnchanged\t\t\t
+262\tLogistics - Vendor Management: Sea Freight Domestic\tUnchanged\t\t\t
+263\tManagement by Objective (Malik)\tUnchanged\t\t\t
+264\tManaging Conflicts (Malik)\tUnchanged\t\t\t
+265\tManaging Conversation (Malik)\tUnchanged\t\t\t
+266\tManaging Meeting (Malik)\tUnchanged\t\t\t
+267\tManaging Superiors and Colleagues (Malik)\tUnchanged\t\t\t
+268\tManaging Yourself (Malik)\tUnchanged\t\t\t
+269\tMELISA - Booking Module\tUnchanged\t\t\t
+270\tMELISA - Customer Master\tUnchanged\t\t\t
+271\tMELISA - Customer Tier Pricing DSS\tUnchanged\t\t\t
+272\tMELISA - Documentation Module\tUnchanged\t\t\t
+273\tMELISA - Invoice Data Reference\tUnchanged\t\t\t
+274\tMELISA - Invoicing Module v0\tUnchanged\t\t\t
+275\tMELISA - Node Master 2024\tUnchanged\t\t\t
+276\tMELISA - On/Off Hire Module 2024\tUnchanged\t\t\t
+277\tMELISA - Penalty Booking\tUnchanged\t\t\t
+278\tMELISA - Port Call Report 2024\tUnchanged\t\t\t
+279\tMelisa - Quick Manual Container Movement and Status\tUnchanged\t\t\t
+280\tMELISA - Rate Report\tUnchanged\t\t\t
+281\tMELISA - Rating Method\tUnchanged\t\t\t
+282\tMELISA - Service Contract\tUnchanged\t\t\t
+283\tMELISA - Surcharge 2025\tUnchanged\t\t\t
+284\tMelisa - Training for SPU\tUnchanged\t\t\t
+285\tMELISA - VAS Booking\tUnchanged\t\t\t
+286\tMeratus's New Vision and Mission\tUnchanged\t\t\t
+287\tM-One : Customer Journey\tUnchanged\t\t\t
+288\tM-One : Induction M-One for Internal Stakeholders\tUnchanged\t\t\t
+289\tMQS: P3W Awareness\tUnchanged\t\t\t
+290\tMSA - Management System & Data Base PBM\tUnchanged\t\t\t
+291\tMSA - Pelatihan Dasar Pengoperasian Ruber TYRE GANTRY\tUnchanged\t\t\t
+292\tMSA - Pelatihan Dasar Pengoperasian Side Loader Single Handler\tUnchanged\t\t\t
+293\tMSA - Pelatihan Harbour Mobile Crane\tUnchanged\t\t\t
+294\tMSA - Penanganan Container\tUnchanged\t\t\t
+295\tMSA - Penanganan Reefer Container\tUnchanged\t\t\t
+296\tMSA - Penanganan Uncontainerized\tUnchanged\t\t\t
+297\tMSA - Penanggulangan Kebakaran dan Pengenalan APAR\tUnchanged\t\t\t
+298\tMSA - Pendapatan & Biaya PBM\tUnchanged\t\t\t
+299\tMSA - Pengetahuan Bongkar Muat 2023\tUnchanged\t\t\t
+300\tMSA - Pengetahuan Claim PBM\tUnchanged\t\t\t
+301\tMSA - Pengetahuan Container\tUnchanged\t\t\t
+302\tMSA - Pengetahuan Stowage Plan\tUnchanged\t\t\t
+303\tMSA - Pengoperasian Dasar Ship to Shore\tUnchanged\t\t\t
+304\tMSA - Perencanaan Bongkar Muat\tUnchanged\t\t\t
+305\tMSA - Perencanaan Kebutuhan TKBM\tUnchanged\t\t\t
+306\tMSA - Perencanaan Layout CY\tUnchanged\t\t\t
+307\tMSA - Stacking Container di CY\tUnchanged\t\t\t
+308\tMSM - Painting & Maintenance\tUnchanged\t\t\t
+309\tMSM Machinery - 01 Aux Mach Fuel System - 2025\tUnchanged\t\t\t
+310\tMSM Machinery - 01 Engine Performance_Normal Operation\tUnchanged\t\t\t
+311\tMSM Machinery - 01 Engine Plan_Fuel System\tUnchanged\t\t\t
+312\tMSM Machinery - 02 Aux Mach Charge Air System\tUnchanged\t\t\t
+313\tMSM Machinery - 02 Engine Performance_Overload Engine Operation\tUnchanged\t\t\t
+314\tMSM Machinery - 02 Engine Plan_Charge Scavenge Air System\tUnchanged\t\t\t
+315\tMSM Machinery - 03 Engine Performance - Function of Collecting Data\tUnchanged\t\t\t
+316\tMSM Machinery - 03 Engine Plan_Compression System\tUnchanged\t\t\t
+317\tMSM Machinery - 04 Aux Mach_Refrigerator\tUnchanged\t\t\t
+318\tMSM Machinery - 04 Engine Performance - Heat Balance & Efficiency\tUnchanged\t\t\t
+319\tMSM Machinery - 04 Engine Plan_Starting Air System\tUnchanged\t\t\t
+320\tMSM Machinery - 05 Aux Mach_Controllable Pitch Propeller\tUnchanged\t\t\t
+321\tMSM Machinery - 05 Engine Performance_Monitoring of Engine Performance\tUnchanged\t\t\t
+322\tMSM Machinery - 05 Engine Plan_Cooling System\tUnchanged\t\t\t
+323\tMSM Machinery - 06 Aux Mach_Lubricating Oil System\tUnchanged\t\t\t
+324\tMSM Machinery - 06 Engine Plan_Lubricating System\tUnchanged\t\t\t
+325\tMSM Machinery - 07 Aux Mach_Cooling System\tUnchanged\t\t\t
+326\tMSM Machinery - 08 Aux Mach_Starting System\tUnchanged\t\t\t
+327\tMSM Machinery - 09 Aux Mach_Purification System\tUnchanged\t\t\t
+328\tMSM Marine - 01 Safety Of Life At Sea\tUnchanged\t\t\t
+329\tMSM Marine - 02 Marine Polution\tUnchanged\t\t\t
+330\tMSM Marine - 03 STCW 2010\tUnchanged\t\t\t
+331\tMSM Marine - 04 MLC 2006\tUnchanged\t\t\t
+332\tMSM Marine - 05 ISM Code\tUnchanged\t\t\t
+333\tMSM Marine - 06 ISPS Code\tUnchanged\t\t\t
+334\tMSM Marine - 07 Ballast Water Management\tUnchanged\t\t\t
+335\tMSM Marine - 08 Garbage Management\tUnchanged\t\t\t
+336\tMSM Marine - 09 Bridge Resource Management\tUnchanged\t\t\t
+337\tMSM Marine - 10 Safety Drill\tUnchanged\t\t\t
+338\tMSM Marine - 12 Class Survey & 13 Ship Certificates\tUnchanged\t\t\t
+339\tMSM Marine - 14 Crewing Management & Certificate\tUnchanged\t\t\t
+340\tMSM Marine - 15 UU Pelayaran\tUnchanged\t\t\t
+341\tNOVA - User Manual & Procedure\tUnchanged\t\t\t
+342\tOKR Certification: Leadership and Goal Setting (Module 1)\tUnchanged\t\t\t
+343\tOKR Certification: Leadership and Goal Setting (Module 2)\tUnchanged\t\t\t
+344\tOKR Certification: Leadership and Goal Setting (Module 3)\tUnchanged\t\t\t
+345\tOKR Certification: Leadership and Goal Setting (Module 4)\tUnchanged\t\t\t
+346\tPersonal Development - 15 Management Essential to Become Good Manager - 2024\tUnchanged\t\t\t
+347\tPersonal Development: Computer Posture\tUnchanged\t\t\t
+348\tPersonal Development: Etika Pergaulan\tUnchanged\t\t\t
+349\tProblem Solving (Malik)\tUnchanged\t\t\t
+350\tProcurement - Basic Knowledge\tUnchanged\t\t\t
+351\tProcurement - D365 : Inventory Request dan Purchase Request\tUnchanged\t\t\t
+352\tProcurement - D365 : Request for Quotation & Purchase Order\tUnchanged\t\t\t
+353\tProcurement - Distribution Management\tUnchanged\t\t\t
+354\tProcurement - Finance for Non Finance\tUnchanged\t\t\t
+355\tProcurement - Inventory Management\tUnchanged\t\t\t
+356\tProcurement - Warehouse Management\tUnchanged\t\t\t
+357\tProcurement MSM - Econnect Flow & Functionalities\tUnchanged\t\t\t
+358\tQuality Awareness\tUnchanged\t\t\t
+359\tRisk Management for Level 12&Above\tUnchanged\t\t\t
+360\tRoot Cause Analysis for Level 10&Above\tUnchanged\t\t\t
+361\tSafety Leadership 2024\tUnchanged\t\t\t
+362\tSistem Informasi Ketidaksesuaian dan Pengembangan (SIKaP)\tUnchanged\t\t\t
+363\tSM - Docking Contract\tUnchanged\t\t\t
+364\tSM - Docking D-12\tUnchanged\t\t\t
+365\tSM - MariApps COMPASS Change Management\tUnchanged\t\t\t
+366\tSM Docking Management - Module 1: Background and Introduction to Dry Docking\tUnchanged\t\t\t
+367\tSM Docking Management - Module 2: Project Management\tUnchanged\t\t\t
+368\tSM Docking Management - Module 3: Planning and Specification\tUnchanged\t\t\t
+369\tSM Docking Management - Module 4: Tendering for Dry Dock Work\tUnchanged\t\t\t
+370\tSM Docking Management - Module 5: Dry Dock Preparation, Execution, and Supervision\tUnchanged\t\t\t
+371\tSM Docking Management - Module 6: Docking, Undocking and Completion of Project\tUnchanged\t\t\t
+372\tSM Workshop - Generator\tUnchanged\t\t\t
+373\tSM Workshop - Global Maritime Distress Safety System\tUnchanged\t\t\t
+374\tSosialisasi Aktivasi & Registrasi CORETAX\tUnchanged\t\t\t
+375\tSosialisasi BPJS Kesehatan Segmen PPU\tUnchanged\t\t\t
+376\tSosialisasi BPJS Ketenagakerjaan - Manfaat Layanan BPJS\tUnchanged\t\t\t
+377\tStakeholder Management\tUnchanged\t\t\t
+378\tThe Will to Perform (Malik)\tUnchanged\t\t\t
+379\tTrucking - Abnormality Monitoring\tUnchanged\t\t\t
+380\tTrucking - Account Payable and DC Admin\tUnchanged\t\t\t
+381\tTrucking - Account Receivable and DC Admin\tUnchanged\t\t\t
+382\tTrucking - Backlog Management\tUnchanged\t\t\t
+383\tTrucking - Basic Investigation & Root Cause Analysis\tUnchanged\t\t\t
+384\tTrucking - Basic Monitoring by GPS\tUnchanged\t\t\t
+385\tTrucking - Basic Transport Analyst\tUnchanged\t\t\t
+386\tTrucking - Basic Trucking Knowledge\tUnchanged\t\t\t
+387\tTrucking - Business Offering (RFQ), Payment (Trip Cost, Fuel)\tUnchanged\t\t\t
+388\tTrucking - Business Overview\tUnchanged\t\t\t
+389\tTrucking - Control Tower\tUnchanged\t\t\t
+390\tTrucking - Control Tower Reporting\tUnchanged\t\t\t
+391\tTrucking - Daily Inspection (P2H)\tUnchanged\t\t\t
+392\tTrucking - Database Driver & Personnel Management\tUnchanged\t\t\t
+393\tTrucking - Document Control\tUnchanged\t\t\t
+394\tTrucking - Dokumen & Legalitas\tUnchanged\t\t\t
+395\tTrucking - Driver Management\tUnchanged\t\t\t
+396\tTrucking - Driver Performance & Evaluation\tUnchanged\t\t\t
+397\tTrucking - Driver Regulation & Compliance\tUnchanged\t\t\t
+398\tTrucking - Inventory Management\tUnchanged\t\t\t
+399\tTrucking - Maintenance Planning & Scheduling\tUnchanged\t\t\t
+400\tTrucking - MJT Operation Overview\tUnchanged\t\t\t
+401\tTrucking - QSHE Operational Trucking\tUnchanged\t\t\t
+402\tTrucking - Recruitment & Screening Driver\tUnchanged\t\t\t
+403\tTrucking - Risk Assesment & HIRADC\tUnchanged\t\t\t
+404\tTrucking - Road Hazard Mapping\tUnchanged\t\t\t
+405\tTrucking - Safety Analysis & Proactive Risk Identification\tUnchanged\t\t\t
+406\tTrucking - Safety Observation Card\tUnchanged\t\t\t
+407\tTrucking - Warehouse Management\tUnchanged\t\t\t
+408\tTutorial Pelaporan SPT Tahunan Karyawan dan Pemadanan NIK-NPWP\tUnchanged\t\t\t
+409\tVendor Management: VMT and Sales Guidance\tUnchanged\t\t\t`;
 
 // HRBP MAPPING LOGIC
 const getHRBP = (sbu: string) => {
@@ -304,7 +712,7 @@ export default function App() {
     
     const headers = lines[0].split('\t').map((h: string) => h.trim());
     
-    return lines.slice(1).reduce((acc: any[], line: string, idx: number) => {
+    const allRows = lines.slice(1).reduce((acc: any[], line: string, idx: number) => {
       if (!line || line.trim() === '') return acc;
 
       const values = line.split('\t');
@@ -312,8 +720,10 @@ export default function App() {
       headers.forEach((header: string, i: number) => { obj[header] = values[i] ? values[i].trim() : ''; });
       
       const rawStatus = (obj['Status'] || '').toLowerCase();
+      if (rawStatus.includes('baru') || rawStatus.includes('new')) return acc;
+
       if (rawStatus.includes('diperbarui') || rawStatus.includes('updated')) obj._normStatus = 'Updated';
-      else obj._normStatus = 'Unchanged';
+      else obj._normStatus = 'On Progress';
 
       obj._linkNew = obj['Link Terbaru'] || null;
       obj._linkOld = obj['Link File Lama'] || null;
@@ -326,6 +736,23 @@ export default function App() {
       if (obj['Nama Module']) acc.push(obj);
       return acc;
     }, []); 
+
+    const uniqueModulesMap = new Map();
+    allRows.forEach((row: any) => {
+      const titleKey = row['Nama Module'].trim().toLowerCase();
+      if (uniqueModulesMap.has(titleKey)) {
+        const existing = uniqueModulesMap.get(titleKey);
+        if (row._normStatus === 'Updated' && existing._normStatus !== 'Updated') {
+          uniqueModulesMap.set(titleKey, row);
+        } else if (row._normStatus === existing._normStatus) {
+          uniqueModulesMap.set(titleKey, row);
+        }
+      } else {
+        uniqueModulesMap.set(titleKey, row);
+      }
+    });
+
+    return Array.from(uniqueModulesMap.values());
   }, [rawData]);
 
   const suggestions = useMemo(() => ({
@@ -358,7 +785,7 @@ export default function App() {
       if (d._normStatus === 'Updated') {
         updatedCount++;
         sbuMap[sbu].updated += 1;
-      } else {
+      } else if (d._normStatus === 'On Progress') {
         unchangedCount++;
       }
     });
@@ -380,11 +807,12 @@ export default function App() {
   const tableData = useMemo(() => {
     let baseData = globallyFilteredData;
     if (moduleView === 'updated') baseData = baseData.filter((d: any) => d._normStatus === 'Updated');
+    if (moduleView === 'on_progress') baseData = baseData.filter((d: any) => d._normStatus === 'On Progress');
 
     if (!statusFilters.includes('all')) {
       baseData = baseData.filter((d: any) => {
         if (statusFilters.includes('updated') && d._normStatus === 'Updated') return true;
-        if (statusFilters.includes('unchanged') && d._normStatus === 'Unchanged') return true;
+        if (statusFilters.includes('on_progress') && d._normStatus === 'On Progress') return true;
         return false;
       });
     }
@@ -492,11 +920,10 @@ export default function App() {
   };
 
   const StatusBadge = ({ status }: any) => {
-    const styles = status === 'Updated' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-600 border-slate-200';
+    const styles = status === 'Updated' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-amber-100 text-amber-700 border-amber-200';
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest border shadow-sm ${styles}`}>
-        {status === 'Updated' && <FileEdit size={10} />}
-        {status === 'Unchanged' && <CheckCircle2 size={10} />}
+        {status === 'Updated' ? <FileEdit size={10} /> : <History size={10} />}
         {status.toUpperCase()}
       </span>
     );
@@ -574,7 +1001,7 @@ export default function App() {
               {[
                 { label: 'Total Modules', val: metrics.total, color: 'blue', icon: BookOpen },
                 { label: 'Module Updated', val: metrics.updatedCount, color: 'indigo', icon: FileEdit },
-                { label: 'Unchanged', val: metrics.unchangedCount, color: 'slate', icon: CheckCircle2 },
+                { label: 'On Progress', val: metrics.unchangedCount, color: 'amber', icon: History },
                 { label: 'Update Rate', val: `${metrics.updateRate}%`, color: 'sky', icon: Activity }
               ].map((card, i) => (
                 <div key={i} className={`bg-white p-3 rounded-2xl border-l-4 border-l-${card.color}-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[64px] relative overflow-hidden group hover:shadow-md transition-all`}>
@@ -646,7 +1073,8 @@ export default function App() {
                 <div className="flex overflow-x-auto no-scrollbar flex-1 p-1">
                   {[
                     { id: 'all', label: 'Library', count: metrics.total, color: 'indigo' },
-                    { id: 'updated', label: 'Updated', count: metrics.updatedCount, color: 'blue' }
+                    { id: 'updated', label: 'Updated', count: metrics.updatedCount, color: 'blue' },
+                    { id: 'on_progress', label: 'On Progress', count: metrics.unchangedCount, color: 'amber' }
                   ].map(v => (
                     <button key={v.id} onClick={() => setModuleView(v.id)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${moduleView === v.id ? `bg-white text-${v.color}-600 shadow-sm border border-slate-200` : 'text-slate-400 hover:text-slate-800'}`}>
                       {v.label} <span className={`ml-1 px-1.5 py-0.5 rounded-full bg-${v.color}-50 text-${v.color}-600 text-[8px]`}>{v.count}</span>
@@ -654,7 +1082,7 @@ export default function App() {
                   ))}
                 </div>
                 <div className="flex items-center px-4 py-2 md:py-0 border-t md:border-t-0 border-slate-200 gap-2 shrink-0 bg-white md:bg-transparent">
-                  <MultiSelectDropdown label="Status" options={[{id: 'all', label: 'All'},{id: 'updated', label: 'Updated'},{id: 'unchanged', label: 'Unchanged'}]} selectedValues={statusFilters} onToggle={(id: string) => handleToggleFilter(id, statusFilters, setStatusFilters)} />
+                  <MultiSelectDropdown label="Status" options={[{id: 'all', label: 'All'},{id: 'updated', label: 'Updated'},{id: 'on_progress', label: 'On Progress'}]} selectedValues={statusFilters} onToggle={(id: string) => handleToggleFilter(id, statusFilters, setStatusFilters)} />
                   <select value={sortOrder} onChange={(e: any) => setSortOrder(e.target.value)} className="bg-white border border-slate-300 text-slate-700 text-[9px] font-black uppercase rounded-lg px-2 h-[32px] outline-none shadow-sm">
                     <option value="default">Default Sort</option>
                     <option value="az">A-Z Name</option>
@@ -703,13 +1131,17 @@ export default function App() {
                             className="font-black text-slate-800 uppercase"
                           />
                         </td>
-                        <td className="px-4 py-2.5 flex flex-col items-center">
-                          <EditableCell 
-                            value={row['Status']} 
-                            onSave={(val: string) => handleCellEdit(row._originalIndex, 'Status', val)}
-                            className="text-center font-bold text-slate-600 uppercase mb-1 justify-center"
-                          />
-                          <StatusBadge status={row._normStatus} />
+                        <td className="px-4 py-2.5 flex flex-col items-center justify-center">
+                          <button 
+                            onClick={() => {
+                              const newStatus = row._normStatus === 'Updated' ? 'On Progress' : 'Updated';
+                              handleCellEdit(row._originalIndex, 'Status', newStatus);
+                            }}
+                            className={`px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all w-full flex items-center justify-center gap-1 border shadow-sm ${row._normStatus === 'Updated' ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:shadow-md' : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:shadow-md'}`}
+                            title="Click to toggle status"
+                          >
+                            {row._normStatus === 'Updated' ? <><FileEdit size={12}/> UPDATED</> : <><History size={12}/> PROGRESS</>}
+                          </button>
                         </td>
                         <td className="px-4 py-2.5">
                           <EditableCell 
