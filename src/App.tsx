@@ -858,7 +858,7 @@ export default function App() {
   const handleExportExcel = () => {
     if (tableData.length === 0) return;
     
-    const headers = ['No', 'Nama Module', 'Status', 'Group SBU/SFU', 'HRBP', 'Link Terbaru', 'Link File Lama'];
+    const headers = ['No', 'Nama Module', 'Status', 'Group SBU/SFU', 'HRBP', 'Link Terbaru', 'Link File Lama', 'Notes'];
     
     const escapeCSV = (val: any) => {
       if (val === null || val === undefined) return '""';
@@ -876,7 +876,8 @@ export default function App() {
         escapeCSV(row['Group SBU/SFU']),
         escapeCSV(row._hrbp),
         escapeCSV(row._linkNew),
-        escapeCSV(row._linkOld)
+        escapeCSV(row._linkOld),
+        escapeCSV(row['Notes'])
       ];
       csvRows.push(rowData.join(','));
     });
@@ -903,7 +904,11 @@ export default function App() {
         headerIndex = headers.findIndex(h => h.toLowerCase() === 'no');
     }
     
-    if (headerIndex === -1) return;
+    if (headerIndex === -1) {
+        headers.push(headerFallback);
+        lines[0] = headers.join('\t');
+        headerIndex = headers.length - 1;
+    }
 
     const targetLine = lines[originalIndex];
     if (targetLine === undefined) return;
@@ -1112,6 +1117,7 @@ export default function App() {
                       <th className="px-4 py-3">Group SBU</th>
                       <th className="px-4 py-3 text-center">HRBP</th>
                       <th className="px-5 py-3 text-center">Akses</th>
+                      <th className="px-5 py-3 min-w-[150px]">Notes</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1180,6 +1186,13 @@ export default function App() {
                               {row._linkOld ? <a href={row._linkOld} target="_blank" rel="noreferrer" className="p-1 bg-slate-50 text-slate-500 rounded hover:bg-slate-600 hover:text-white shrink-0"><History size={10} /></a> : <div className="p-1 bg-slate-50 text-slate-300 rounded border border-slate-100 cursor-not-allowed"><History size={10} /></div>}
                             </div>
                           </div>
+                        </td>
+                        <td className="px-5 py-2.5 align-top">
+                          <EditableCell 
+                            value={row['Notes'] || ''} 
+                            onSave={(val: string) => handleCellEdit(row._originalIndex, 'Notes', val)}
+                            className="text-slate-600 font-medium whitespace-pre-wrap min-h-[48px] bg-white border border-slate-200 rounded-md !p-2"
+                          />
                         </td>
                       </tr>
                     ))}
