@@ -49,8 +49,8 @@ getAnalytics(app);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const DEFAULT_TSV = `No Nama Module Status  Group SBU/SFU Link Terbaru  Link File Lama
-1 Contoh Module Dummy New Asset & Charter https://example.com/new https://example.com/old`;
+const DEFAULT_TSV = `No	Nama Module	Status	Group SBU/SFU	Link Terbaru	Link File Lama
+1	Contoh Module Dummy	Updated	Asset & Charter	https://example.com/new	https://example.com/old`;
 
 // HRBP MAPPING LOGIC
 const getHRBP = (sbu: string) => {
@@ -187,6 +187,55 @@ const GlobalSuggestionInput = ({ value, setValue, placeholder, list, icon: Icon 
   );
 };
 
+// Inline Editable Cell Component
+const EditableCell = ({ value, onSave, className, isLink }: any) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [localValue, setLocalValue] = useState(value);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  const handleBlur = () => {
+    setIsEditing(false);
+    if (localValue !== value) {
+      onSave(localValue);
+    }
+  };
+
+  const handleKeyDown = (e: any) => {
+    if (e.key === 'Enter') {
+      e.target.blur();
+    } else if (e.key === 'Escape') {
+      setLocalValue(value);
+      setIsEditing(false);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <input
+        autoFocus
+        value={localValue}
+        onChange={e => setLocalValue(e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
+        className={`w-full bg-white border border-blue-500 rounded px-1.5 py-1 outline-none focus:ring-2 focus:ring-blue-500/20 text-[10px] text-slate-800 font-medium shadow-sm ${className}`}
+      />
+    );
+  }
+
+  return (
+    <div 
+      onClick={() => setIsEditing(true)} 
+      className={`cursor-text hover:bg-blue-50 hover:border-blue-200 border border-transparent px-1.5 py-1 rounded transition-colors min-h-[24px] flex items-center break-all ${className}`}
+      title="Click to edit"
+    >
+      {value ? (isLink ? <span className="truncate max-w-[150px] inline-block">{value}</span> : value) : <span className="text-slate-300 italic text-[9px]">Empty</span>}
+    </div>
+  );
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [moduleView, setModuleView] = useState('all'); 
@@ -205,7 +254,6 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  // BARIS YANG DIPERBAIKI (Destructuring dengan penamaan ulang/alias properti)
   const { value: searchFilter, setValue: setSearchFilter } = useFilterDropdown("");
   const { value: sbuFilter, setValue: setSbuFilter } = useFilterDropdown("");
   const { value: hrbpFilter, setValue: setHrbpFilter } = useFilterDropdown("");
@@ -256,7 +304,7 @@ export default function App() {
     
     const headers = lines[0].split('\t').map((h: string) => h.trim());
     
-    return lines.slice(1).reduce((acc: any[], line: string) => {
+    return lines.slice(1).reduce((acc: any[], line: string, idx: number) => {
       if (!line || line.trim() === '') return acc;
 
       const values = line.split('\t');
@@ -264,13 +312,13 @@ export default function App() {
       headers.forEach((header: string, i: number) => { obj[header] = values[i] ? values[i].trim() : ''; });
       
       const rawStatus = (obj['Status'] || '').toLowerCase();
-      if (rawStatus.includes('baru') || rawStatus.includes('new')) obj._normStatus = 'New';
-      else if (rawStatus.includes('diperbarui') || rawStatus.includes('updated')) obj._normStatus = 'Updated';
+      if (rawStatus.includes('diperbarui') || rawStatus.includes('updated')) obj._normStatus = 'Updated';
       else obj._normStatus = 'Unchanged';
 
       obj._linkNew = obj['Link Terbaru'] || null;
       obj._linkOld = obj['Link File Lama'] || null;
       obj._order = parseInt(obj['No'] || obj['NO']) || 0;
+      obj._originalIndex = idx + 1; // Preserve original line index for inline editing
       
       // Auto Assign HRBP
       obj._hrbp = getHRBP(obj['Group SBU/SFU']);
@@ -299,18 +347,15 @@ export default function App() {
 
   const metrics = useMemo(() => {
     const data = globallyFilteredData;
-    let newCount = 0, updatedCount = 0, unchangedCount = 0;
+    let updatedCount = 0, unchangedCount = 0;
     const sbuMap: Record<string, any> = {};
 
     data.forEach((d: any) => {
       const sbu = d['Group SBU/SFU'] || 'Unknown SBU';
-      if (!sbuMap[sbu]) sbuMap[sbu] = { name: sbu, total: 0, new: 0, updated: 0, hrbp: d._hrbp };
+      if (!sbuMap[sbu]) sbuMap[sbu] = { name: sbu, total: 0, updated: 0, hrbp: d._hrbp };
       sbuMap[sbu].total += 1;
 
-      if (d._normStatus === 'New') {
-        newCount++;
-        sbuMap[sbu].new += 1;
-      } else if (d._normStatus === 'Updated') {
+      if (d._normStatus === 'Updated') {
         updatedCount++;
         sbuMap[sbu].updated += 1;
       } else {
@@ -321,25 +366,23 @@ export default function App() {
     const sbuSummary = Object.values(sbuMap)
       .map((s: any) => ({
         ...s,
-        activityScore: s.new * 2 + s.updated
+        activityScore: s.updated
       }))
       .sort((a: any, b: any) => b.activityScore - a.activityScore);
 
-    const updateRate = data.length > 0 ? (((newCount + updatedCount) / data.length) * 100).toFixed(1) : 0;
+    const updateRate = data.length > 0 ? ((updatedCount / data.length) * 100).toFixed(1) : 0;
 
     return {
-      total: data.length, newCount, updatedCount, unchangedCount, updateRate, sbuSummary
+      total: data.length, updatedCount, unchangedCount, updateRate, sbuSummary
     };
   }, [globallyFilteredData]);
 
   const tableData = useMemo(() => {
     let baseData = globallyFilteredData;
-    if (moduleView === 'new') baseData = baseData.filter((d: any) => d._normStatus === 'New');
-    else if (moduleView === 'updated') baseData = baseData.filter((d: any) => d._normStatus === 'Updated');
+    if (moduleView === 'updated') baseData = baseData.filter((d: any) => d._normStatus === 'Updated');
 
     if (!statusFilters.includes('all')) {
       baseData = baseData.filter((d: any) => {
-        if (statusFilters.includes('new') && d._normStatus === 'New') return true;
         if (statusFilters.includes('updated') && d._normStatus === 'Updated') return true;
         if (statusFilters.includes('unchanged') && d._normStatus === 'Unchanged') return true;
         return false;
@@ -370,7 +413,7 @@ export default function App() {
     try {
       const docRef = doc(db, 'dashboard', 'module_tracker_data_v2');
       await setDoc(docRef, { tsvData: rawData, updatedAt: new Date().toISOString(), updatedBy: user.uid });
-      setActiveTab('dashboard');
+      // Keep user on the same tab they were on instead of throwing them to dashboard
     } catch (e: any) { 
       console.error("Save Document Error:", e);
       setSyncError("Save Failed"); 
@@ -422,13 +465,36 @@ export default function App() {
 
   const clearAllFilters = () => { setSearchFilter(""); setSbuFilter(""); setHrbpFilter(""); };
 
+  const handleCellEdit = (originalIndex: number, headerFallback: string, newValue: string) => {
+    const lines = rawData.split(/\r?\n/);
+    if (!lines[0]) return;
+    const headers = lines[0].split('\t').map((h: string) => h.trim());
+    
+    let headerIndex = headers.indexOf(headerFallback);
+    if (headerIndex === -1 && headerFallback.toLowerCase() === 'no') {
+        headerIndex = headers.findIndex(h => h.toLowerCase() === 'no');
+    }
+    
+    if (headerIndex === -1) return;
+
+    const targetLine = lines[originalIndex];
+    if (targetLine === undefined) return;
+    
+    const values = targetLine.split('\t');
+    
+    while(values.length <= headerIndex) values.push('');
+    
+    values[headerIndex] = newValue;
+    lines[originalIndex] = values.join('\t');
+    
+    const newRawData = lines.join('\n');
+    setRawData(newRawData);
+  };
+
   const StatusBadge = ({ status }: any) => {
-    const styles = status === 'New' 
-      ? 'bg-emerald-100 text-emerald-700 border-emerald-200' 
-      : status === 'Updated' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-600 border-slate-200';
+    const styles = status === 'Updated' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-600 border-slate-200';
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest border shadow-sm ${styles}`}>
-        {status === 'New' && <FilePlus2 size={10} />}
         {status === 'Updated' && <FileEdit size={10} />}
         {status === 'Unchanged' && <CheckCircle2 size={10} />}
         {status.toUpperCase()}
@@ -507,8 +573,8 @@ export default function App() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0">
               {[
                 { label: 'Total Modules', val: metrics.total, color: 'blue', icon: BookOpen },
-                { label: 'New Module', val: metrics.newCount, color: 'emerald', icon: FilePlus2 },
                 { label: 'Module Updated', val: metrics.updatedCount, color: 'indigo', icon: FileEdit },
+                { label: 'Unchanged', val: metrics.unchangedCount, color: 'slate', icon: CheckCircle2 },
                 { label: 'Update Rate', val: `${metrics.updateRate}%`, color: 'sky', icon: Activity }
               ].map((card, i) => (
                 <div key={i} className={`bg-white p-3 rounded-2xl border-l-4 border-l-${card.color}-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[64px] relative overflow-hidden group hover:shadow-md transition-all`}>
@@ -530,7 +596,6 @@ export default function App() {
                   <h2 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">SBU / SFU Progress Tracking</h2>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> NEW</span>
                   <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> UPDATED</span>
                 </div>
               </div>
@@ -556,11 +621,9 @@ export default function App() {
                       {/* Progress Details */}
                       <div className="flex flex-col gap-1 mt-1">
                         <div className="flex items-center justify-between text-[8px] font-black uppercase tracking-widest">
-                          <span className="text-emerald-600">New: {sbu.new}</span>
                           <span className="text-blue-600">Update: {sbu.updated}</span>
                         </div>
                         <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex shadow-inner">
-                          <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-full" style={{ width: `${(sbu.new / sbu.total) * 100}%` }}></div>
                           <div className="bg-gradient-to-r from-blue-400 to-blue-500 h-full" style={{ width: `${(sbu.updated / sbu.total) * 100}%` }}></div>
                         </div>
                       </div>
@@ -583,7 +646,6 @@ export default function App() {
                 <div className="flex overflow-x-auto no-scrollbar flex-1 p-1">
                   {[
                     { id: 'all', label: 'Library', count: metrics.total, color: 'indigo' },
-                    { id: 'new', label: 'New', count: metrics.newCount, color: 'emerald' },
                     { id: 'updated', label: 'Updated', count: metrics.updatedCount, color: 'blue' }
                   ].map(v => (
                     <button key={v.id} onClick={() => setModuleView(v.id)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${moduleView === v.id ? `bg-white text-${v.color}-600 shadow-sm border border-slate-200` : 'text-slate-400 hover:text-slate-800'}`}>
@@ -592,13 +654,16 @@ export default function App() {
                   ))}
                 </div>
                 <div className="flex items-center px-4 py-2 md:py-0 border-t md:border-t-0 border-slate-200 gap-2 shrink-0 bg-white md:bg-transparent">
-                  <MultiSelectDropdown label="Status" options={[{id: 'all', label: 'All'},{id: 'new', label: 'New'},{id: 'updated', label: 'Updated'},{id: 'unchanged', label: 'Unchanged'}]} selectedValues={statusFilters} onToggle={(id: string) => handleToggleFilter(id, statusFilters, setStatusFilters)} />
+                  <MultiSelectDropdown label="Status" options={[{id: 'all', label: 'All'},{id: 'updated', label: 'Updated'},{id: 'unchanged', label: 'Unchanged'}]} selectedValues={statusFilters} onToggle={(id: string) => handleToggleFilter(id, statusFilters, setStatusFilters)} />
                   <select value={sortOrder} onChange={(e: any) => setSortOrder(e.target.value)} className="bg-white border border-slate-300 text-slate-700 text-[9px] font-black uppercase rounded-lg px-2 h-[32px] outline-none shadow-sm">
                     <option value="default">Default Sort</option>
                     <option value="az">A-Z Name</option>
                     <option value="za">Z-A Name</option>
                   </select>
                   <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2 ml-1">
+                    <button onClick={handleSaveToCloud} disabled={isSaving || !user} className="text-[9px] font-black text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-1.5 uppercase tracking-widest px-3 h-[32px] rounded-lg shadow-md transition-all active:scale-95 disabled:opacity-70" title="Sync Changes to Cloud">
+                      {isSaving ? <RefreshCw size={11} className="animate-spin" /> : <Save size={11}/>} Sync
+                    </button>
                     <button onClick={handleExportExcel} className="text-[9px] font-black text-white bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1.5 uppercase tracking-widest px-3 h-[32px] rounded-lg shadow-md transition-all active:scale-95" title="Export Filtered Data to Excel">
                       <FileSpreadsheet size={12}/> Excel
                     </button>
@@ -617,22 +682,71 @@ export default function App() {
                       <th className="px-5 py-3 min-w-[250px]">Nama Module</th>
                       <th className="px-4 py-3 text-center">Status</th>
                       <th className="px-4 py-3">Group SBU</th>
-                      <th className="px-4 py-3">HRBP</th>
+                      <th className="px-4 py-3 text-center">HRBP</th>
                       <th className="px-5 py-3 text-center">Akses</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {tableData.map((row: any, idx: number) => (
                       <tr key={idx} className="hover:bg-slate-50 transition-colors group">
-                        <td className="px-5 py-2.5 text-[10px] font-bold text-slate-400 text-center">{row['No'] || row['NO'] || '-'}</td>
-                        <td className="px-5 py-2.5"><div className="text-[10px] font-black text-slate-800 line-clamp-2 uppercase" title={row['Nama Module']}>{row['Nama Module'] || '-'}</div></td>
-                        <td className="px-4 py-2.5 text-center"><StatusBadge status={row._normStatus} /></td>
-                        <td className="px-4 py-2.5 text-[10px] font-bold text-slate-500 uppercase">{row['Group SBU/SFU'] || '-'}</td>
-                        <td className="px-4 py-2.5 text-[10px] font-black text-blue-600 uppercase">{row._hrbp || '-'}</td>
-                        <td className="px-5 py-2.5 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            {row._linkNew ? <a href={row._linkNew} target="_blank" rel="noreferrer" className="p-1.5 bg-blue-50 text-blue-600 rounded-lg border border-blue-100 transition-all hover:bg-blue-600 hover:text-white"><ExternalLink size={12} /></a> : <div className="p-1.5 bg-slate-50 text-slate-300 rounded-lg border border-slate-100 cursor-not-allowed"><ExternalLink size={12} /></div>}
-                            {row._linkOld ? <a href={row._linkOld} target="_blank" rel="noreferrer" className="p-1.5 bg-slate-50 text-slate-500 rounded-lg border border-slate-200 transition-all hover:bg-slate-600 hover:text-white"><History size={12} /></a> : <div className="p-1.5 bg-slate-50 text-slate-300 rounded-lg border border-slate-100 cursor-not-allowed"><History size={12} /></div>}
+                        <td className="px-5 py-2.5">
+                          <EditableCell 
+                            value={row['No'] || row['NO']} 
+                            onSave={(val: string) => handleCellEdit(row._originalIndex, row['NO'] !== undefined ? 'NO' : 'No', val)}
+                            className="text-center font-bold text-slate-400 justify-center"
+                          />
+                        </td>
+                        <td className="px-5 py-2.5">
+                          <EditableCell 
+                            value={row['Nama Module']} 
+                            onSave={(val: string) => handleCellEdit(row._originalIndex, 'Nama Module', val)}
+                            className="font-black text-slate-800 uppercase"
+                          />
+                        </td>
+                        <td className="px-4 py-2.5 flex flex-col items-center">
+                          <EditableCell 
+                            value={row['Status']} 
+                            onSave={(val: string) => handleCellEdit(row._originalIndex, 'Status', val)}
+                            className="text-center font-bold text-slate-600 uppercase mb-1 justify-center"
+                          />
+                          <StatusBadge status={row._normStatus} />
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <EditableCell 
+                            value={row['Group SBU/SFU']} 
+                            onSave={(val: string) => handleCellEdit(row._originalIndex, 'Group SBU/SFU', val)}
+                            className="font-bold text-slate-500 uppercase"
+                          />
+                        </td>
+                        <td className="px-4 py-2.5 text-[10px] font-black text-blue-600 uppercase text-center align-middle">
+                          {row._hrbp || '-'}
+                        </td>
+                        <td className="px-5 py-2.5">
+                          <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[8px] font-bold text-slate-400 w-8">NEW:</span>
+                              <div className="flex-1 min-w-0">
+                                <EditableCell 
+                                  value={row['Link Terbaru']} 
+                                  onSave={(val: string) => handleCellEdit(row._originalIndex, 'Link Terbaru', val)}
+                                  className="text-blue-500"
+                                  isLink={true}
+                                />
+                              </div>
+                              {row._linkNew ? <a href={row._linkNew} target="_blank" rel="noreferrer" className="p-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-600 hover:text-white shrink-0"><ExternalLink size={10} /></a> : <div className="p-1 bg-slate-50 text-slate-300 rounded border border-slate-100 cursor-not-allowed"><ExternalLink size={10} /></div>}
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[8px] font-bold text-slate-400 w-8">OLD:</span>
+                              <div className="flex-1 min-w-0">
+                                <EditableCell 
+                                  value={row['Link File Lama']} 
+                                  onSave={(val: string) => handleCellEdit(row._originalIndex, 'Link File Lama', val)}
+                                  className="text-slate-500"
+                                  isLink={true}
+                                />
+                              </div>
+                              {row._linkOld ? <a href={row._linkOld} target="_blank" rel="noreferrer" className="p-1 bg-slate-50 text-slate-500 rounded hover:bg-slate-600 hover:text-white shrink-0"><History size={10} /></a> : <div className="p-1 bg-slate-50 text-slate-300 rounded border border-slate-100 cursor-not-allowed"><History size={10} /></div>}
+                            </div>
                           </div>
                         </td>
                       </tr>
