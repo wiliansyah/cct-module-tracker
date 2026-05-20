@@ -596,7 +596,7 @@ const GlobalSuggestionInput = ({ value, setValue, placeholder, list, icon: Icon 
 };
 
 // Inline Editable Cell Component
-const EditableCell = ({ value, onSave, className, isLink }: any) => {
+const EditableCell = ({ value, onSave, className, isLink, isTextArea = false }: any) => {
   const [isEditing, setIsEditing] = useState(false);
   const [localValue, setLocalValue] = useState(value);
 
@@ -612,7 +612,7 @@ const EditableCell = ({ value, onSave, className, isLink }: any) => {
   };
 
   const handleKeyDown = (e: any) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !isTextArea) {
       e.target.blur();
     } else if (e.key === 'Escape') {
       setLocalValue(value);
@@ -621,6 +621,18 @@ const EditableCell = ({ value, onSave, className, isLink }: any) => {
   };
 
   if (isEditing) {
+    if (isTextArea) {
+      return (
+        <textarea
+          autoFocus
+          value={localValue}
+          onChange={e => setLocalValue(e.target.value)}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          className="w-full bg-white border border-blue-500 rounded px-2 py-1.5 outline-none focus:ring-2 focus:ring-blue-500/20 text-[10px] text-slate-800 font-medium shadow-sm resize-y min-h-[60px] custom-scrollbar"
+        />
+      );
+    }
     return (
       <input
         autoFocus
@@ -628,7 +640,7 @@ const EditableCell = ({ value, onSave, className, isLink }: any) => {
         onChange={e => setLocalValue(e.target.value)}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
-        className={`w-full bg-white border border-blue-500 rounded px-1.5 py-1 outline-none focus:ring-2 focus:ring-blue-500/20 text-[10px] text-slate-800 font-medium shadow-sm ${className}`}
+        className="w-full bg-white border border-blue-500 rounded px-1.5 py-1 outline-none focus:ring-2 focus:ring-blue-500/20 text-[10px] text-slate-800 font-medium shadow-sm"
       />
     );
   }
@@ -636,7 +648,7 @@ const EditableCell = ({ value, onSave, className, isLink }: any) => {
   return (
     <div 
       onClick={() => setIsEditing(true)} 
-      className={`cursor-text hover:bg-blue-50 hover:border-blue-200 border border-transparent px-1.5 py-1 rounded transition-colors min-h-[24px] flex items-center break-all ${className}`}
+      className={`cursor-text hover:bg-blue-50 hover:border-blue-200 border border-transparent px-1.5 py-1 rounded transition-colors min-h-[24px] flex ${isTextArea ? 'items-start' : 'items-center'} break-words ${className}`}
       title="Click to edit"
     >
       {value ? (isLink ? <span className="truncate max-w-[150px] inline-block">{value}</span> : value) : <span className="text-slate-300 italic text-[9px]">Empty</span>}
@@ -1200,11 +1212,12 @@ export default function App() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-5 py-2.5 align-top">
+                        <td className="px-5 py-2.5 align-top w-[220px]">
                           <EditableCell 
                             value={row['Notes'] || ''} 
                             onSave={(val: string) => handleCellEdit(row._originalIndex, 'Notes', val)}
-                            className="text-slate-600 font-medium whitespace-pre-wrap min-h-[48px] bg-white border border-slate-200 rounded-md !p-2"
+                            isTextArea={true}
+                            className="text-slate-600 text-[10px] font-medium whitespace-pre-wrap min-h-[40px] bg-white border border-slate-200 rounded-md !p-2 leading-relaxed"
                           />
                         </td>
                       </tr>
