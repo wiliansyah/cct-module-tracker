@@ -464,12 +464,13 @@ const DEFAULT_TSV = `No\tNama Module\tStatus\tGroup SBU/SFU\tLink Terbaru\tLink 
 const getHRBP = (sbu: string) => {
   const s = (sbu || '').toLowerCase();
   if (s.includes('asset') || s.includes('charter')) return 'Akbar';
+  if (s.includes('hmm')) return 'Arum';
   if (s.includes('corp') || s.includes('fin') || s.includes('acc') || s.includes('ga') || s.includes('hmm') || s.includes('hr') || s.includes('internal audit') || s.includes('legal') || s.includes('procurement')) return 'Sherly';
   if (s.includes('bpm') || s.includes('it')) return 'Berhard';
   if (s.includes('crewing') || s.includes('msm')) return 'Sentra';
   if (s.includes('commercial') || s.includes('operation') || s.includes('trade') || s.includes('academy')) return 'Andrew';
   if (s.includes('logistic') || s.includes('trucking')) return 'Taufik';
-  if (s.includes('mtm') || s.includes('terminal')) return 'Ronny';
+  if (s.includes('mtm') || s.includes('terminal') || s.includes('clc')) return 'Ronny';
   return 'Unassigned';
 };
 
