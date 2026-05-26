@@ -470,7 +470,7 @@ const getHRBP = (sbu: string) => {
   if (s.includes('crewing') || s.includes('msm')) return 'Sentra';
   if (s.includes('commercial') || s.includes('operation') || s.includes('trade') || s.includes('academy')) return 'Andrew';
   if (s.includes('logistic') || s.includes('trucking')) return 'Taufik';
-  if (s.includes('mtm') || s.includes('terminal') || s.includes('clc')) return 'Ronny';
+  if (s.includes('mtm') || s.includes('terminal') || s.includes('clc') || s.includes('msa')) return 'Ronny';
   return 'Unassigned';
 };
 
