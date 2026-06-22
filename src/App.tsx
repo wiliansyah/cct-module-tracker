@@ -474,64 +474,6 @@ const getHRBP = (sbu: string) => {
   return 'Unassigned';
 };
 
-// Reusable Components
-const MultiSelectDropdown = ({ label, options, selectedValues, onToggle }: any) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: any) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setIsOpen(false);
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  return (
-    <div className="relative inline-block text-left" ref={dropdownRef} style={{ zIndex: isOpen ? 100 : 50 }}>
-      <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="bg-white border border-slate-300 text-slate-600 text-[10px] font-bold uppercase rounded-lg px-3 py-2 flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm active:bg-slate-100 h-[34px]"
-      >
-        <span className="opacity-60">{label}:</span> 
-        <span className="text-slate-800">
-          {selectedValues.length === 0 || selectedValues.includes('all') ? 'All' : `${selectedValues.length} Active`}
-        </span>
-        <ChevronDown size={12} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {isOpen && (
-        <div className="absolute left-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in-95 duration-100">
-          <div className="px-3 py-1 mb-1 border-b border-slate-100">
-             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Select Filters</span>
-          </div>
-          {options.map((opt: any) => (
-            <label key={opt.id} className="flex items-center px-4 py-2.5 hover:bg-slate-50 cursor-pointer group transition-colors">
-              <div className={`w-4 h-4 border rounded flex items-center justify-center transition-all ${selectedValues.includes(opt.id) ? 'bg-blue-600 border-blue-600 shadow-sm' : 'border-slate-300 group-hover:border-blue-500'}`}>
-                {selectedValues.includes(opt.id) && <Check size={10} className="text-white stroke-[4px]" />}
-              </div>
-              <input 
-                type="checkbox" 
-                className="hidden" 
-                checked={selectedValues.includes(opt.id)}
-                onChange={() => onToggle(opt.id)}
-              />
-              <span className={`ml-3 text-[10px] font-bold uppercase tracking-wider ${selectedValues.includes(opt.id) ? 'text-blue-600' : 'text-slate-600'}`}>
-                {opt.label}
-              </span>
-            </label>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-function useFilterDropdown(initialValue = "") {
-  const [value, setValue] = useState(initialValue);
-  return { value, setValue };
-}
-
 const GlobalSuggestionInput = ({ value, setValue, placeholder, list, icon: Icon }: any) => {
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -661,9 +603,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [moduleView, setModuleView] = useState('all'); 
 
-  const [statusFilters, setStatusFilters] = useState<string[]>(['all']); 
   const [sortOrder, setSortOrder] = useState('default'); 
-  
   const [rawData, setRawData] = useState(DEFAULT_TSV);
   
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -675,9 +615,10 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  const { value: searchFilter, setSearchFilter } = useFilterDropdown("");
-  const { value: sbuFilter, setSbuFilter } = useFilterDropdown("");
-  const { value: hrbpFilter, setHrbpFilter } = useFilterDropdown("");
+  // Filter States using standard useState
+  const [searchFilter, setSearchFilter] = useState("");
+  const [sbuFilter, setSbuFilter] = useState("");
+  const [hrbpFilter, setHrbpFilter] = useState("");
 
   // FIREBASE INIT
   useEffect(() => {
@@ -743,8 +684,21 @@ export default function App() {
       obj._order = parseInt(obj['No'] || obj['NO']) || 0;
       obj._originalIndex = idx + 1; // Preserve original line index for inline editing
       
+      // SMART EXTRACTION FOR EMPTY SBU: Fill empty Group SBU/SFU column based on module name
+      let sbu = obj['Group SBU/SFU'] || '';
+      if (!sbu && obj['Nama Module']) {
+          if (obj['Nama Module'].includes(' - ')) {
+              sbu = obj['Nama Module'].split(' - ')[0].trim();
+          } else if (obj['Nama Module'].includes(' : ')) {
+              sbu = obj['Nama Module'].split(' : ')[0].trim();
+          } else if (obj['Nama Module'].includes(':')) {
+              sbu = obj['Nama Module'].split(':')[0].trim();
+          }
+          obj['Group SBU/SFU'] = sbu; // Update it so it displays correctly and can be filtered
+      }
+
       // Auto Assign HRBP
-      obj._hrbp = getHRBP(obj['Group SBU/SFU']);
+      obj._hrbp = getHRBP(sbu);
 
       if (obj['Nama Module']) acc.push(obj);
       return acc;
@@ -819,34 +773,16 @@ export default function App() {
 
   const tableData = useMemo(() => {
     let baseData = globallyFilteredData;
+    
+    // Tab filters act as the primary status filter now
     if (moduleView === 'checked') baseData = baseData.filter((d: any) => d._normStatus === 'Checked');
     if (moduleView === 'on_progress') baseData = baseData.filter((d: any) => d._normStatus === 'On Progress');
-
-    if (!statusFilters.includes('all')) {
-      baseData = baseData.filter((d: any) => {
-        if (statusFilters.includes('checked') && d._normStatus === 'Checked') return true;
-        if (statusFilters.includes('on_progress') && d._normStatus === 'On Progress') return true;
-        return false;
-      });
-    }
 
     if (sortOrder === 'default') baseData = [...baseData].sort((a: any, b: any) => a._order - b._order);
     else if (sortOrder === 'az') baseData = [...baseData].sort((a: any, b: any) => (a['Nama Module'] || '').localeCompare(b['Nama Module'] || ''));
     else if (sortOrder === 'za') baseData = [...baseData].sort((a: any, b: any) => (b['Nama Module'] || '').localeCompare(a['Nama Module'] || ''));
     return baseData;
-  }, [globallyFilteredData, moduleView, statusFilters, sortOrder]);
-
-  const handleToggleFilter = (id: string, current: string[], setter: any) => {
-    if (id === 'all') setter(['all']);
-    else {
-      let next = current.filter(item => item !== 'all');
-      if (next.includes(id)) {
-        next = next.filter(item => item !== id);
-        if (next.length === 0) next = ['all'];
-      } else next.push(id);
-      setter(next);
-    }
-  };
+  }, [globallyFilteredData, moduleView, sortOrder]);
 
   const handleSaveToCloud = async () => {
     if (!user) return;
@@ -854,7 +790,6 @@ export default function App() {
     try {
       const docRef = doc(db, 'dashboard', 'module_tracker_data_v2');
       await setDoc(docRef, { tsvData: rawData, updatedAt: new Date().toISOString(), updatedBy: user.uid });
-      // Keep user on the same tab they were on instead of throwing them to dashboard
     } catch (e: any) { 
       console.error("Save Document Error:", e);
       setSyncError("Save Failed"); 
@@ -950,16 +885,6 @@ export default function App() {
     }
   };
 
-  const StatusBadge = ({ status }: any) => {
-    const styles = status === 'Checked' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-amber-100 text-amber-700 border-amber-200';
-    return (
-      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest border shadow-sm ${styles}`}>
-        {status === 'Checked' ? <CheckCircle2 size={10} /> : <History size={10} />}
-        {status.toUpperCase()}
-      </span>
-    );
-  };
-
   return (
     <div className="h-screen bg-[#F8FAFC] text-slate-800 font-sans selection:bg-blue-200 selection:text-blue-900 flex flex-col overflow-hidden">
       
@@ -1027,7 +952,7 @@ export default function App() {
           
           <div className="h-full flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
             
-            {/* Top Stat Cards - Compact View */}
+            {/* Top Stat Cards - Compact View (Clickable as Filters) */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0">
               {[
                 { label: 'Total Modules', val: metrics.total, color: 'blue', icon: BookOpen },
@@ -1035,7 +960,17 @@ export default function App() {
                 { label: 'On Progress', val: metrics.unchangedCount, color: 'amber', icon: History },
                 { label: 'Check Rate', val: `${metrics.checkRate}%`, color: 'sky', icon: Activity }
               ].map((card, i) => (
-                <div key={i} className={`bg-white p-3 rounded-2xl border-l-4 border-l-${card.color}-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[64px] relative overflow-hidden group hover:shadow-md transition-all`}>
+                <div 
+                  key={i} 
+                  onClick={() => {
+                     if (card.label.includes('Checked')) setModuleView('checked');
+                     else if (card.label.includes('Progress')) setModuleView('on_progress');
+                     else setModuleView('all');
+                     setActiveTab('modules');
+                  }}
+                  className={`cursor-pointer bg-white p-3 rounded-2xl border-l-4 border-l-${card.color}-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[64px] relative overflow-hidden group hover:shadow-md hover:border-${card.color}-300 transition-all`}
+                  title={`Click to filter by ${card.label}`}
+                >
                   <div className="flex justify-between items-start z-10">
                     <h3 className={`text-[9px] font-black text-${card.color}-600 uppercase tracking-widest`}>{card.label}</h3>
                     <card.icon size={12} className={`text-${card.color}-500 opacity-60`} />
@@ -1046,7 +981,7 @@ export default function App() {
               ))}
             </div>
 
-            {/* SBU Tracking Grid (Full Width, No Scroll Optimised) */}
+            {/* SBU Tracking Grid */}
             <div className="flex-1 bg-white rounded-2xl border border-slate-200 flex flex-col min-h-0 shadow-sm overflow-hidden">
               <div className="px-4 py-2.5 border-b border-slate-200 flex items-center justify-between bg-white shrink-0">
                 <div className="flex items-center gap-2">
@@ -1061,12 +996,19 @@ export default function App() {
               <div className="p-3 flex-1 overflow-y-auto custom-scrollbar bg-slate-50/50">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                   {metrics.sbuSummary.map((sbu: any, idx: number) => (
-                    <div key={idx} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1.5 hover:border-blue-300 hover:shadow-md transition-all">
-                      
+                    <div 
+                      key={idx} 
+                      onClick={() => {
+                        setSbuFilter(sbu.name);
+                        setActiveTab('modules');
+                      }}
+                      className="cursor-pointer bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1.5 hover:border-blue-400 hover:shadow-md transition-all group"
+                      title={`Filter table by SBU: ${sbu.name}`}
+                    >
                       {/* Header: SBU Name */}
                       <div className="flex justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
-                          <span className="text-[10px] font-black text-slate-800 truncate block uppercase leading-tight" title={sbu.name}>{sbu.name}</span>
+                          <span className="text-[10px] font-black text-slate-800 truncate block uppercase leading-tight group-hover:text-blue-600 transition-colors">{sbu.name}</span>
                         </div>
                       </div>
                       
@@ -1113,7 +1055,6 @@ export default function App() {
                   ))}
                 </div>
                 <div className="flex items-center px-4 py-2 md:py-0 border-t md:border-t-0 border-slate-200 gap-2 shrink-0 bg-white md:bg-transparent">
-                  <MultiSelectDropdown label="Status" options={[{id: 'all', label: 'All'},{id: 'checked', label: 'Checked'},{id: 'on_progress', label: 'On Progress'}]} selectedValues={statusFilters} onToggle={(id: string) => handleToggleFilter(id, statusFilters, setStatusFilters)} />
                   <select value={sortOrder} onChange={(e: any) => setSortOrder(e.target.value)} className="bg-white border border-slate-300 text-slate-700 text-[9px] font-black uppercase rounded-lg px-2 h-[32px] outline-none shadow-sm">
                     <option value="default">Default Sort</option>
                     <option value="az">A-Z Name</option>
