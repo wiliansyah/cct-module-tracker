@@ -675,9 +675,9 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  const { value: searchFilter, setValue: setSearchFilter } = useFilterDropdown("");
-  const { value: sbuFilter, setValue: setSbuFilter } = useFilterDropdown("");
-  const { value: hrbpFilter, setValue: setHrbpFilter } = useFilterDropdown("");
+  const { value: searchFilter, setSearchFilter } = useFilterDropdown("");
+  const { value: sbuFilter, setSbuFilter } = useFilterDropdown("");
+  const { value: hrbpFilter, setHrbpFilter } = useFilterDropdown("");
 
   // FIREBASE INIT
   useEffect(() => {
@@ -735,7 +735,7 @@ export default function App() {
       const rawStatus = (obj['Status'] || '').toLowerCase();
       if (rawStatus.includes('baru') || rawStatus.includes('new')) return acc;
 
-      if (rawStatus.includes('diperbarui') || rawStatus.includes('updated')) obj._normStatus = 'Updated';
+      if (rawStatus.includes('diperbarui') || rawStatus.includes('updated') || rawStatus.includes('checked')) obj._normStatus = 'Checked';
       else obj._normStatus = 'On Progress';
 
       obj._linkNew = obj['Link Terbaru'] || null;
@@ -755,7 +755,7 @@ export default function App() {
       const titleKey = row['Nama Module'].trim().toLowerCase();
       if (uniqueModulesMap.has(titleKey)) {
         const existing = uniqueModulesMap.get(titleKey);
-        if (row._normStatus === 'Updated' && existing._normStatus !== 'Updated') {
+        if (row._normStatus === 'Checked' && existing._normStatus !== 'Checked') {
           uniqueModulesMap.set(titleKey, row);
         } else if (row._normStatus === existing._normStatus) {
           uniqueModulesMap.set(titleKey, row);
@@ -787,17 +787,17 @@ export default function App() {
 
   const metrics = useMemo(() => {
     const data = globallyFilteredData;
-    let updatedCount = 0, unchangedCount = 0;
+    let checkedCount = 0, unchangedCount = 0;
     const sbuMap: Record<string, any> = {};
 
     data.forEach((d: any) => {
       const sbu = d['Group SBU/SFU'] || 'Unknown SBU';
-      if (!sbuMap[sbu]) sbuMap[sbu] = { name: sbu, total: 0, updated: 0, hrbp: d._hrbp };
+      if (!sbuMap[sbu]) sbuMap[sbu] = { name: sbu, total: 0, checked: 0, hrbp: d._hrbp };
       sbuMap[sbu].total += 1;
 
-      if (d._normStatus === 'Updated') {
-        updatedCount++;
-        sbuMap[sbu].updated += 1;
+      if (d._normStatus === 'Checked') {
+        checkedCount++;
+        sbuMap[sbu].checked += 1;
       } else if (d._normStatus === 'On Progress') {
         unchangedCount++;
       }
@@ -806,25 +806,25 @@ export default function App() {
     const sbuSummary = Object.values(sbuMap)
       .map((s: any) => ({
         ...s,
-        activityScore: s.updated
+        activityScore: s.checked
       }))
       .sort((a: any, b: any) => b.activityScore - a.activityScore);
 
-    const updateRate = data.length > 0 ? ((updatedCount / data.length) * 100).toFixed(1) : 0;
+    const checkRate = data.length > 0 ? ((checkedCount / data.length) * 100).toFixed(1) : 0;
 
     return {
-      total: data.length, updatedCount, unchangedCount, updateRate, sbuSummary
+      total: data.length, checkedCount, unchangedCount, checkRate, sbuSummary
     };
   }, [globallyFilteredData]);
 
   const tableData = useMemo(() => {
     let baseData = globallyFilteredData;
-    if (moduleView === 'updated') baseData = baseData.filter((d: any) => d._normStatus === 'Updated');
+    if (moduleView === 'checked') baseData = baseData.filter((d: any) => d._normStatus === 'Checked');
     if (moduleView === 'on_progress') baseData = baseData.filter((d: any) => d._normStatus === 'On Progress');
 
     if (!statusFilters.includes('all')) {
       baseData = baseData.filter((d: any) => {
-        if (statusFilters.includes('updated') && d._normStatus === 'Updated') return true;
+        if (statusFilters.includes('checked') && d._normStatus === 'Checked') return true;
         if (statusFilters.includes('on_progress') && d._normStatus === 'On Progress') return true;
         return false;
       });
@@ -951,10 +951,10 @@ export default function App() {
   };
 
   const StatusBadge = ({ status }: any) => {
-    const styles = status === 'Updated' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-amber-100 text-amber-700 border-amber-200';
+    const styles = status === 'Checked' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-amber-100 text-amber-700 border-amber-200';
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest border shadow-sm ${styles}`}>
-        {status === 'Updated' ? <FileEdit size={10} /> : <History size={10} />}
+        {status === 'Checked' ? <CheckCircle2 size={10} /> : <History size={10} />}
         {status.toUpperCase()}
       </span>
     );
@@ -1031,9 +1031,9 @@ export default function App() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0">
               {[
                 { label: 'Total Modules', val: metrics.total, color: 'blue', icon: BookOpen },
-                { label: 'Module Updated', val: metrics.updatedCount, color: 'indigo', icon: FileEdit },
+                { label: 'Module Checked', val: metrics.checkedCount, color: 'indigo', icon: CheckCircle2 },
                 { label: 'On Progress', val: metrics.unchangedCount, color: 'amber', icon: History },
-                { label: 'Update Rate', val: `${metrics.updateRate}%`, color: 'sky', icon: Activity }
+                { label: 'Check Rate', val: `${metrics.checkRate}%`, color: 'sky', icon: Activity }
               ].map((card, i) => (
                 <div key={i} className={`bg-white p-3 rounded-2xl border-l-4 border-l-${card.color}-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[64px] relative overflow-hidden group hover:shadow-md transition-all`}>
                   <div className="flex justify-between items-start z-10">
@@ -1054,7 +1054,7 @@ export default function App() {
                   <h2 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">SBU / SFU Progress Tracking</h2>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> UPDATED</span>
+                  <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> CHECKED</span>
                 </div>
               </div>
               
@@ -1079,10 +1079,10 @@ export default function App() {
                       {/* Progress Details */}
                       <div className="flex flex-col gap-1 mt-1">
                         <div className="flex items-center justify-between text-[8px] font-black uppercase tracking-widest">
-                          <span className="text-blue-600">Update: {sbu.updated}</span>
+                          <span className="text-blue-600">Checked: {sbu.checked}</span>
                         </div>
                         <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex shadow-inner">
-                          <div className="bg-gradient-to-r from-blue-400 to-blue-500 h-full" style={{ width: `${(sbu.updated / sbu.total) * 100}%` }}></div>
+                          <div className="bg-gradient-to-r from-blue-400 to-blue-500 h-full" style={{ width: `${(sbu.checked / sbu.total) * 100}%` }}></div>
                         </div>
                       </div>
 
@@ -1104,7 +1104,7 @@ export default function App() {
                 <div className="flex overflow-x-auto no-scrollbar flex-1 p-1">
                   {[
                     { id: 'all', label: 'Library', count: metrics.total, color: 'indigo' },
-                    { id: 'updated', label: 'Updated', count: metrics.updatedCount, color: 'blue' },
+                    { id: 'checked', label: 'Checked', count: metrics.checkedCount, color: 'blue' },
                     { id: 'on_progress', label: 'On Progress', count: metrics.unchangedCount, color: 'amber' }
                   ].map(v => (
                     <button key={v.id} onClick={() => setModuleView(v.id)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${moduleView === v.id ? `bg-white text-${v.color}-600 shadow-sm border border-slate-200` : 'text-slate-400 hover:text-slate-800'}`}>
@@ -1113,7 +1113,7 @@ export default function App() {
                   ))}
                 </div>
                 <div className="flex items-center px-4 py-2 md:py-0 border-t md:border-t-0 border-slate-200 gap-2 shrink-0 bg-white md:bg-transparent">
-                  <MultiSelectDropdown label="Status" options={[{id: 'all', label: 'All'},{id: 'updated', label: 'Updated'},{id: 'on_progress', label: 'On Progress'}]} selectedValues={statusFilters} onToggle={(id: string) => handleToggleFilter(id, statusFilters, setStatusFilters)} />
+                  <MultiSelectDropdown label="Status" options={[{id: 'all', label: 'All'},{id: 'checked', label: 'Checked'},{id: 'on_progress', label: 'On Progress'}]} selectedValues={statusFilters} onToggle={(id: string) => handleToggleFilter(id, statusFilters, setStatusFilters)} />
                   <select value={sortOrder} onChange={(e: any) => setSortOrder(e.target.value)} className="bg-white border border-slate-300 text-slate-700 text-[9px] font-black uppercase rounded-lg px-2 h-[32px] outline-none shadow-sm">
                     <option value="default">Default Sort</option>
                     <option value="az">A-Z Name</option>
@@ -1166,13 +1166,13 @@ export default function App() {
                         <td className="px-4 py-2.5 flex flex-col items-center justify-center">
                           <button 
                             onClick={() => {
-                              const newStatus = row._normStatus === 'Updated' ? 'On Progress' : 'Updated';
+                              const newStatus = row._normStatus === 'Checked' ? 'On Progress' : 'Checked';
                               handleCellEdit(row._originalIndex, 'Status', newStatus);
                             }}
-                            className={`px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all w-full flex items-center justify-center gap-1 border shadow-sm ${row._normStatus === 'Updated' ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:shadow-md' : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:shadow-md'}`}
+                            className={`px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all w-full flex items-center justify-center gap-1 border shadow-sm ${row._normStatus === 'Checked' ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:shadow-md' : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:shadow-md'}`}
                             title="Click to toggle status"
                           >
-                            {row._normStatus === 'Updated' ? <><FileEdit size={12}/> UPDATED</> : <><History size={12}/> PROGRESS</>}
+                            {row._normStatus === 'Checked' ? <><CheckCircle2 size={12}/> CHECKED</> : <><History size={12}/> PROGRESS</>}
                           </button>
                         </td>
                         <td className="px-4 py-2.5">
