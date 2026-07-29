@@ -676,7 +676,9 @@ export default function App() {
       const rawStatus = (obj['Status'] || '').toLowerCase();
       if (rawStatus.includes('baru') || rawStatus.includes('new')) return acc;
 
-      if (rawStatus.includes('diperbarui') || rawStatus.includes('updated') || rawStatus.includes('checked')) obj._normStatus = 'Checked';
+      // UPDATED TO INCLUDE 'FINAL' STAGE
+      if (rawStatus.includes('final')) obj._normStatus = 'Final';
+      else if (rawStatus.includes('diperbarui') || rawStatus.includes('updated') || rawStatus.includes('checked')) obj._normStatus = 'Checked';
       else obj._normStatus = 'On Progress';
 
       obj._linkNew = obj['Link Terbaru'] || null;
@@ -705,11 +707,14 @@ export default function App() {
     }, []); 
 
     const uniqueModulesMap = new Map();
+    // Prioritize updating the map with Final > Checked > On Progress
+    const statusPriority: any = { 'Final': 3, 'Checked': 2, 'On Progress': 1 };
+    
     allRows.forEach((row: any) => {
       const titleKey = row['Nama Module'].trim().toLowerCase();
       if (uniqueModulesMap.has(titleKey)) {
         const existing = uniqueModulesMap.get(titleKey);
-        if (row._normStatus === 'Checked' && existing._normStatus !== 'Checked') {
+        if (statusPriority[row._normStatus] > statusPriority[existing._normStatus]) {
           uniqueModulesMap.set(titleKey, row);
         } else if (row._normStatus === existing._normStatus) {
           uniqueModulesMap.set(titleKey, row);
@@ -741,15 +746,18 @@ export default function App() {
 
   const metrics = useMemo(() => {
     const data = globallyFilteredData;
-    let checkedCount = 0, unchangedCount = 0;
+    let checkedCount = 0, finalCount = 0, unchangedCount = 0;
     const sbuMap: Record<string, any> = {};
 
     data.forEach((d: any) => {
       const sbu = d['Group SBU/SFU'] || 'Unknown SBU';
-      if (!sbuMap[sbu]) sbuMap[sbu] = { name: sbu, total: 0, checked: 0, hrbp: d._hrbp };
+      if (!sbuMap[sbu]) sbuMap[sbu] = { name: sbu, total: 0, checked: 0, final: 0, hrbp: d._hrbp };
       sbuMap[sbu].total += 1;
 
-      if (d._normStatus === 'Checked') {
+      if (d._normStatus === 'Final') {
+        finalCount++;
+        sbuMap[sbu].final += 1;
+      } else if (d._normStatus === 'Checked') {
         checkedCount++;
         sbuMap[sbu].checked += 1;
       } else if (d._normStatus === 'On Progress') {
@@ -760,14 +768,14 @@ export default function App() {
     const sbuSummary = Object.values(sbuMap)
       .map((s: any) => ({
         ...s,
-        activityScore: s.checked
+        activityScore: s.checked + (s.final * 2)
       }))
       .sort((a: any, b: any) => b.activityScore - a.activityScore);
 
-    const checkRate = data.length > 0 ? ((checkedCount / data.length) * 100).toFixed(1) : 0;
+    const checkRate = data.length > 0 ? (((checkedCount + finalCount) / data.length) * 100).toFixed(1) : 0;
 
     return {
-      total: data.length, checkedCount, unchangedCount, checkRate, sbuSummary
+      total: data.length, checkedCount, finalCount, unchangedCount, checkRate, sbuSummary
     };
   }, [globallyFilteredData]);
 
@@ -775,6 +783,7 @@ export default function App() {
     let baseData = globallyFilteredData;
     
     // Tab filters act as the primary status filter now
+    if (moduleView === 'final') baseData = baseData.filter((d: any) => d._normStatus === 'Final');
     if (moduleView === 'checked') baseData = baseData.filter((d: any) => d._normStatus === 'Checked');
     if (moduleView === 'on_progress') baseData = baseData.filter((d: any) => d._normStatus === 'On Progress');
 
@@ -953,17 +962,19 @@ export default function App() {
           <div className="h-full flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
             
             {/* Top Stat Cards - Compact View (Clickable as Filters) */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 shrink-0">
               {[
                 { label: 'Total Modules', val: metrics.total, color: 'blue', icon: BookOpen },
-                { label: 'Module Checked', val: metrics.checkedCount, color: 'indigo', icon: CheckCircle2 },
+                { label: 'Checked', val: metrics.checkedCount, color: 'indigo', icon: CheckCircle2 },
+                { label: 'Final', val: metrics.finalCount, color: 'emerald', icon: ShieldCheck },
                 { label: 'On Progress', val: metrics.unchangedCount, color: 'amber', icon: History },
                 { label: 'Check Rate', val: `${metrics.checkRate}%`, color: 'sky', icon: Activity }
               ].map((card, i) => (
                 <div 
                   key={i} 
                   onClick={() => {
-                     if (card.label.includes('Checked')) setModuleView('checked');
+                     if (card.label.includes('Final')) setModuleView('final');
+                     else if (card.label.includes('Checked')) setModuleView('checked');
                      else if (card.label.includes('Progress')) setModuleView('on_progress');
                      else setModuleView('all');
                      setActiveTab('modules');
@@ -988,8 +999,9 @@ export default function App() {
                   <Building2 className="text-blue-500" size={14} />
                   <h2 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">SBU / SFU Progress Tracking</h2>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> CHECKED</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div> CHECKED</span>
+                  <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> FINAL</span>
                 </div>
               </div>
               
@@ -1021,10 +1033,12 @@ export default function App() {
                       {/* Progress Details */}
                       <div className="flex flex-col gap-1 mt-1">
                         <div className="flex items-center justify-between text-[8px] font-black uppercase tracking-widest">
-                          <span className="text-blue-600">Checked: {sbu.checked}</span>
+                          <span className="text-indigo-600">Chk: {sbu.checked}</span>
+                          <span className="text-emerald-600">Fin: {sbu.final}</span>
                         </div>
                         <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex shadow-inner">
-                          <div className="bg-gradient-to-r from-blue-400 to-blue-500 h-full" style={{ width: `${(sbu.checked / sbu.total) * 100}%` }}></div>
+                          <div className="bg-gradient-to-r from-indigo-400 to-indigo-500 h-full" style={{ width: `${(sbu.checked / sbu.total) * 100}%` }}></div>
+                          <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-full" style={{ width: `${(sbu.final / sbu.total) * 100}%` }}></div>
                         </div>
                       </div>
 
@@ -1045,8 +1059,9 @@ export default function App() {
               <div className="flex flex-col md:flex-row border-b border-slate-200 bg-slate-50/50 shrink-0">
                 <div className="flex overflow-x-auto no-scrollbar flex-1 p-1">
                   {[
-                    { id: 'all', label: 'Library', count: metrics.total, color: 'indigo' },
-                    { id: 'checked', label: 'Checked', count: metrics.checkedCount, color: 'blue' },
+                    { id: 'all', label: 'Library', count: metrics.total, color: 'slate' },
+                    { id: 'checked', label: 'Checked', count: metrics.checkedCount, color: 'indigo' },
+                    { id: 'final', label: 'Final', count: metrics.finalCount, color: 'emerald' },
                     { id: 'on_progress', label: 'On Progress', count: metrics.unchangedCount, color: 'amber' }
                   ].map(v => (
                     <button key={v.id} onClick={() => setModuleView(v.id)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${moduleView === v.id ? `bg-white text-${v.color}-600 shadow-sm border border-slate-200` : 'text-slate-400 hover:text-slate-800'}`}>
@@ -1107,13 +1122,22 @@ export default function App() {
                         <td className="px-4 py-2.5 flex flex-col items-center justify-center">
                           <button 
                             onClick={() => {
-                              const newStatus = row._normStatus === 'Checked' ? 'On Progress' : 'Checked';
+                              let newStatus = 'Checked';
+                              if (row._normStatus === 'On Progress') newStatus = 'Checked';
+                              else if (row._normStatus === 'Checked') newStatus = 'Final';
+                              else if (row._normStatus === 'Final') newStatus = 'On Progress';
+                              
                               handleCellEdit(row._originalIndex, 'Status', newStatus);
                             }}
-                            className={`px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all w-full flex items-center justify-center gap-1 border shadow-sm ${row._normStatus === 'Checked' ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:shadow-md' : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:shadow-md'}`}
-                            title="Click to toggle status"
+                            className={`px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all w-full flex items-center justify-center gap-1 border shadow-sm ${
+                               row._normStatus === 'Final' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:shadow-md' :
+                               row._normStatus === 'Checked' ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 hover:shadow-md' : 
+                               'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:shadow-md'}`}
+                            title="Click to toggle status (Progress -> Checked -> Final)"
                           >
-                            {row._normStatus === 'Checked' ? <><CheckCircle2 size={12}/> CHECKED</> : <><History size={12}/> PROGRESS</>}
+                            {row._normStatus === 'Final' ? <><ShieldCheck size={12}/> FINAL</> : 
+                             row._normStatus === 'Checked' ? <><CheckCircle2 size={12}/> CHECKED</> : 
+                             <><History size={12}/> PROGRESS</>}
                           </button>
                         </td>
                         <td className="px-4 py-2.5">
