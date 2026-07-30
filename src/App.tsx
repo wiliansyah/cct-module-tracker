@@ -601,7 +601,7 @@ const EditableCell = ({ value, onSave, className, isLink, isTextArea = false }: 
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [moduleView, setModuleView] = useState('all'); 
+  const [moduleView, setModuleView] = useState('active'); // Default ke Active Only (jika tidak ada No Edit, tampilannya sama dengan All)
 
   const [sortOrder, setSortOrder] = useState('default'); 
   const [rawData, setRawData] = useState(DEFAULT_TSV);
@@ -615,7 +615,7 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  // Filter States using standard useState
+  // Filter States
   const [searchFilter, setSearchFilter] = useState("");
   const [sbuFilter, setSbuFilter] = useState("");
   const [hrbpFilter, setHrbpFilter] = useState("");
@@ -676,17 +676,18 @@ export default function App() {
       const rawStatus = (obj['Status'] || '').toLowerCase();
       if (rawStatus.includes('baru') || rawStatus.includes('new')) return acc;
 
-      // UPDATED TO INCLUDE 'FINAL' STAGE
+      // Status Normalization
       if (rawStatus.includes('final')) obj._normStatus = 'Final';
       else if (rawStatus.includes('diperbarui') || rawStatus.includes('updated') || rawStatus.includes('checked')) obj._normStatus = 'Checked';
+      else if (rawStatus.includes('archived') || rawStatus.includes('no edit') || rawStatus.includes('tidak perlu') || rawStatus.includes('exclude')) obj._normStatus = 'Archived';
       else obj._normStatus = 'On Progress';
 
       obj._linkNew = obj['Link Terbaru'] || null;
       obj._linkOld = obj['Link File Lama'] || null;
       obj._order = parseInt(obj['No'] || obj['NO']) || 0;
-      obj._originalIndex = idx + 1; // Preserve original line index for inline editing
+      obj._originalIndex = idx + 1;
       
-      // SMART EXTRACTION FOR EMPTY SBU: Fill empty Group SBU/SFU column based on module name
+      // SMART EXTRACTION FOR EMPTY SBU
       let sbu = obj['Group SBU/SFU'] || '';
       if (!sbu && obj['Nama Module']) {
           if (obj['Nama Module'].includes(' - ')) {
@@ -696,7 +697,7 @@ export default function App() {
           } else if (obj['Nama Module'].includes(':')) {
               sbu = obj['Nama Module'].split(':')[0].trim();
           }
-          obj['Group SBU/SFU'] = sbu; // Update it so it displays correctly and can be filtered
+          obj['Group SBU/SFU'] = sbu;
       }
 
       // Auto Assign HRBP
@@ -707,8 +708,7 @@ export default function App() {
     }, []); 
 
     const uniqueModulesMap = new Map();
-    // Prioritize updating the map with Final > Checked > On Progress
-    const statusPriority: any = { 'Final': 3, 'Checked': 2, 'On Progress': 1 };
+    const statusPriority: any = { 'Final': 4, 'Checked': 3, 'On Progress': 2, 'Archived': 1 };
     
     allRows.forEach((row: any) => {
       const titleKey = row['Nama Module'].trim().toLowerCase();
@@ -746,22 +746,31 @@ export default function App() {
 
   const metrics = useMemo(() => {
     const data = globallyFilteredData;
-    let checkedCount = 0, finalCount = 0, unchangedCount = 0;
+    let checkedCount = 0, finalCount = 0, unchangedCount = 0, archivedCount = 0;
+    let activeTotal = 0; 
     const sbuMap: Record<string, any> = {};
 
     data.forEach((d: any) => {
       const sbu = d['Group SBU/SFU'] || 'Unknown SBU';
-      if (!sbuMap[sbu]) sbuMap[sbu] = { name: sbu, total: 0, checked: 0, final: 0, hrbp: d._hrbp };
+      
+      if (!sbuMap[sbu]) sbuMap[sbu] = { name: sbu, total: 0, activeTotal: 0, checked: 0, final: 0, hrbp: d._hrbp };
       sbuMap[sbu].total += 1;
 
-      if (d._normStatus === 'Final') {
-        finalCount++;
-        sbuMap[sbu].final += 1;
-      } else if (d._normStatus === 'Checked') {
-        checkedCount++;
-        sbuMap[sbu].checked += 1;
-      } else if (d._normStatus === 'On Progress') {
-        unchangedCount++;
+      if (d._normStatus === 'Archived') {
+        archivedCount++;
+      } else {
+        activeTotal++;
+        sbuMap[sbu].activeTotal += 1;
+        
+        if (d._normStatus === 'Final') {
+          finalCount++;
+          sbuMap[sbu].final += 1;
+        } else if (d._normStatus === 'Checked') {
+          checkedCount++;
+          sbuMap[sbu].checked += 1;
+        } else if (d._normStatus === 'On Progress') {
+          unchangedCount++;
+        }
       }
     });
     
@@ -772,20 +781,31 @@ export default function App() {
       }))
       .sort((a: any, b: any) => b.activityScore - a.activityScore);
 
-    const checkRate = data.length > 0 ? (((checkedCount + finalCount) / data.length) * 100).toFixed(1) : 0;
+    // Percentage Calculation (Only tracking Active Modules)
+    const checkRate = activeTotal > 0 ? (((checkedCount + finalCount) / activeTotal) * 100).toFixed(1) : 0;
 
     return {
-      total: data.length, checkedCount, finalCount, unchangedCount, checkRate, sbuSummary
+      total: data.length, 
+      activeTotal, 
+      checkedCount, 
+      finalCount, 
+      unchangedCount, 
+      archivedCount, 
+      checkRate, 
+      sbuSummary
     };
   }, [globallyFilteredData]);
 
   const tableData = useMemo(() => {
     let baseData = globallyFilteredData;
     
-    // Tab filters act as the primary status filter now
+    // Logika filter tab Detail View
     if (moduleView === 'final') baseData = baseData.filter((d: any) => d._normStatus === 'Final');
-    if (moduleView === 'checked') baseData = baseData.filter((d: any) => d._normStatus === 'Checked');
-    if (moduleView === 'on_progress') baseData = baseData.filter((d: any) => d._normStatus === 'On Progress');
+    else if (moduleView === 'checked') baseData = baseData.filter((d: any) => d._normStatus === 'Checked');
+    else if (moduleView === 'on_progress') baseData = baseData.filter((d: any) => d._normStatus === 'On Progress');
+    else if (moduleView === 'archived') baseData = baseData.filter((d: any) => d._normStatus === 'Archived');
+    else if (moduleView === 'active') baseData = baseData.filter((d: any) => d._normStatus !== 'Archived'); // Active Only
+    // jika 'all', tidak ada yang di filter (semua termasuk No Edit)
 
     if (sortOrder === 'default') baseData = [...baseData].sort((a: any, b: any) => a._order - b._order);
     else if (sortOrder === 'az') baseData = [...baseData].sort((a: any, b: any) => (a['Nama Module'] || '').localeCompare(b['Nama Module'] || ''));
@@ -962,31 +982,36 @@ export default function App() {
           <div className="h-full flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
             
             {/* Top Stat Cards - Compact View (Clickable as Filters) */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 shrink-0">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 shrink-0">
               {[
-                { label: 'Total Modules', val: metrics.total, color: 'blue', icon: BookOpen },
-                { label: 'Checked', val: metrics.checkedCount, color: 'indigo', icon: CheckCircle2 },
-                { label: 'Final', val: metrics.finalCount, color: 'emerald', icon: ShieldCheck },
-                { label: 'On Progress', val: metrics.unchangedCount, color: 'amber', icon: History },
-                { label: 'Check Rate', val: `${metrics.checkRate}%`, color: 'sky', icon: Activity }
+                // Subval ditambahkan agar Total Library kelihatan di Card Active Modules
+                { label: 'Active Modules', val: metrics.activeTotal, subVal: `TOTAL: ${metrics.total}`, color: 'blue', icon: BookOpen, targetView: 'all' },
+                { label: 'Checked', val: metrics.checkedCount, color: 'indigo', icon: CheckCircle2, targetView: 'checked' },
+                { label: 'Final', val: metrics.finalCount, color: 'emerald', icon: ShieldCheck, targetView: 'final' },
+                { label: 'On Progress', val: metrics.unchangedCount, color: 'amber', icon: History, targetView: 'on_progress' },
+                { label: 'No Edit', val: metrics.archivedCount, color: 'slate', icon: EyeOff, targetView: 'archived' },
+                { label: 'Check Rate', val: `${metrics.checkRate}%`, color: 'sky', icon: Activity, targetView: 'active' }
               ].map((card, i) => (
                 <div 
                   key={i} 
                   onClick={() => {
-                     if (card.label.includes('Final')) setModuleView('final');
-                     else if (card.label.includes('Checked')) setModuleView('checked');
-                     else if (card.label.includes('Progress')) setModuleView('on_progress');
-                     else setModuleView('all');
+                     // Navigasi yang lebih rapi menggunakan targetView
+                     setModuleView(card.targetView);
                      setActiveTab('modules');
                   }}
                   className={`cursor-pointer bg-white p-3 rounded-2xl border-l-4 border-l-${card.color}-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[64px] relative overflow-hidden group hover:shadow-md hover:border-${card.color}-300 transition-all`}
-                  title={`Click to filter by ${card.label}`}
+                  title={`Click to view in Details`}
                 >
                   <div className="flex justify-between items-start z-10">
                     <h3 className={`text-[9px] font-black text-${card.color}-600 uppercase tracking-widest`}>{card.label}</h3>
                     <card.icon size={12} className={`text-${card.color}-500 opacity-60`} />
                   </div>
-                  <div className="text-xl font-black text-slate-800 tracking-tighter leading-none z-10 mt-1">{card.val}</div>
+                  <div className="flex flex-col z-10 mt-1">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-xl font-black text-slate-800 tracking-tighter leading-none">{card.val}</span>
+                      {card.subVal && <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{card.subVal}</span>}
+                    </div>
+                  </div>
                   <div className={`absolute -right-2 -bottom-2 opacity-[0.03] group-hover:scale-110 transition-transform`}><card.icon size={45} /></div>
                 </div>
               ))}
@@ -1024,21 +1049,23 @@ export default function App() {
                         </div>
                       </div>
                       
-                      {/* Detail: Total Modules & HRBP */}
+                      {/* Detail: Active Modules & HRBP (ditambah rasio total agar transparan) */}
                       <div className="flex justify-between items-center mt-1">
-                         <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{sbu.total} Total</span>
+                         <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest" title={`Active Modul: ${sbu.activeTotal} dari Total Keseluruhan: ${sbu.total}`}>
+                           {sbu.activeTotal} Active <span className="text-slate-300">/ {sbu.total}</span>
+                         </span>
                          <span className="text-[8px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-widest flex items-center gap-1"><Users size={8} /> {sbu.hrbp}</span>
                       </div>
                       
-                      {/* Progress Details */}
+                      {/* Progress Details - Hanya dihitung dari activeTotal (Total tanpa No Edit) */}
                       <div className="flex flex-col gap-1 mt-1">
                         <div className="flex items-center justify-between text-[8px] font-black uppercase tracking-widest">
                           <span className="text-indigo-600">Chk: {sbu.checked}</span>
                           <span className="text-emerald-600">Fin: {sbu.final}</span>
                         </div>
                         <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex shadow-inner">
-                          <div className="bg-gradient-to-r from-indigo-400 to-indigo-500 h-full" style={{ width: `${(sbu.checked / sbu.total) * 100}%` }}></div>
-                          <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-full" style={{ width: `${(sbu.final / sbu.total) * 100}%` }}></div>
+                          <div className="bg-gradient-to-r from-indigo-400 to-indigo-500 h-full" style={{ width: `${sbu.activeTotal > 0 ? (sbu.checked / sbu.activeTotal) * 100 : 0}%` }}></div>
+                          <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-full" style={{ width: `${sbu.activeTotal > 0 ? (sbu.final / sbu.activeTotal) * 100 : 0}%` }}></div>
                         </div>
                       </div>
 
@@ -1059,10 +1086,13 @@ export default function App() {
               <div className="flex flex-col md:flex-row border-b border-slate-200 bg-slate-50/50 shrink-0">
                 <div className="flex overflow-x-auto no-scrollbar flex-1 p-1">
                   {[
-                    { id: 'all', label: 'Library', count: metrics.total, color: 'slate' },
+                    // Tab filter sekarang dipisah antara Library (Total keseluruhan) dan Active (Dikurangi No Edit)
+                    { id: 'all', label: 'Total (Library)', count: metrics.total, color: 'slate' },
+                    { id: 'active', label: 'Active Only', count: metrics.activeTotal, color: 'blue' },
                     { id: 'checked', label: 'Checked', count: metrics.checkedCount, color: 'indigo' },
                     { id: 'final', label: 'Final', count: metrics.finalCount, color: 'emerald' },
-                    { id: 'on_progress', label: 'On Progress', count: metrics.unchangedCount, color: 'amber' }
+                    { id: 'on_progress', label: 'On Progress', count: metrics.unchangedCount, color: 'amber' },
+                    { id: 'archived', label: 'No Edit', count: metrics.archivedCount, color: 'slate' }
                   ].map(v => (
                     <button key={v.id} onClick={() => setModuleView(v.id)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${moduleView === v.id ? `bg-white text-${v.color}-600 shadow-sm border border-slate-200` : 'text-slate-400 hover:text-slate-800'}`}>
                       {v.label} <span className={`ml-1 px-1.5 py-0.5 rounded-full bg-${v.color}-50 text-${v.color}-600 text-[8px]`}>{v.count}</span>
@@ -1125,18 +1155,21 @@ export default function App() {
                               let newStatus = 'Checked';
                               if (row._normStatus === 'On Progress') newStatus = 'Checked';
                               else if (row._normStatus === 'Checked') newStatus = 'Final';
-                              else if (row._normStatus === 'Final') newStatus = 'On Progress';
+                              else if (row._normStatus === 'Final') newStatus = 'Archived';
+                              else if (row._normStatus === 'Archived') newStatus = 'On Progress';
                               
                               handleCellEdit(row._originalIndex, 'Status', newStatus);
                             }}
                             className={`px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all w-full flex items-center justify-center gap-1 border shadow-sm ${
                                row._normStatus === 'Final' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:shadow-md' :
                                row._normStatus === 'Checked' ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 hover:shadow-md' : 
+                               row._normStatus === 'Archived' ? 'bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200 hover:shadow-md' :
                                'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:shadow-md'}`}
-                            title="Click to toggle status (Progress -> Checked -> Final)"
+                            title="Click to toggle status (Progress -> Checked -> Final -> No Edit)"
                           >
                             {row._normStatus === 'Final' ? <><ShieldCheck size={12}/> FINAL</> : 
                              row._normStatus === 'Checked' ? <><CheckCircle2 size={12}/> CHECKED</> : 
+                             row._normStatus === 'Archived' ? <><EyeOff size={12}/> NO EDIT</> :
                              <><History size={12}/> PROGRESS</>}
                           </button>
                         </td>
