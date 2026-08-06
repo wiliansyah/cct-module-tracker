@@ -464,7 +464,7 @@ const DEFAULT_TSV = `No\tNama Module\tStatus\tGroup SBU/SFU\tLink Terbaru\tLink 
 408\tTutorial Pelaporan SPT Tahunan Karyawan dan Pemadanan NIK-NPWP\tUnchanged\t\t\t
 409\tVendor Management: VMT and Sales Guidance\tUnchanged\t\t\t`;
 
-// HRBP MAPPING LOGIC (Updated: Andrew merged to Taufik)
+// HRBP MAPPING LOGIC 
 const getHRBP = (sbu: string) => {
   const s = (sbu || '').toLowerCase();
   if (s.includes('asset') || s.includes('charter')) return 'Akbar';
@@ -604,7 +604,7 @@ const EditableCell = ({ value, onSave, className, isLink, isTextArea = false }: 
 
 // Helper: Convert Intern Status for Main UI Display
 const getShortInternStatus = (status: string) => {
-  if (!status) return 'PROG: CELINE';
+  if (!status) return 'PROG: SME';
   if (status === 'Progress by Celine') return 'PROG: CELINE';
   if (status === 'Progress by Diana') return 'PROG: DIANA';
   if (status === 'Progress by SME') return 'PROG: SME';
@@ -718,11 +718,11 @@ export default function App() {
       // Auto Assign HRBP
       obj._hrbp = getHRBP(sbu);
 
-      // Defaulting Intern Status dynamically if not present
+      // Defaulting Intern Status dynamically if not present (Default to SME)
       let internStateRaw = obj['Intern Status'] || '';
       if (!internStateRaw) {
-         if (obj._normStatus === 'Checked') obj._internStatus = 'Checked by Celine';
-         else obj._internStatus = 'Progress by Celine';
+         if (obj._normStatus === 'Checked') obj._internStatus = 'Checked by SME';
+         else obj._internStatus = 'Progress by SME';
       } else {
          obj._internStatus = internStateRaw;
       }
@@ -1194,18 +1194,17 @@ export default function App() {
                           <button 
                             onClick={() => {
                               let newStatus = 'Checked';
-                              let currentIntern = row._internStatus || 'Progress by Celine';
+                              let currentIntern = row._internStatus || 'Progress by SME';
                               let newIntern = currentIntern;
 
                               // SYNC LOGIC MAIN ➔ INTERN
                               if (row._normStatus === 'On Progress') {
                                   newStatus = 'Checked';
                                   newIntern = currentIntern.replace('Progress', 'Checked');
-                                  if (!newIntern.includes('Checked')) newIntern = 'Checked by Celine'; // fallback jika sebelumnya undefined aneh
+                                  if (!newIntern.includes('Checked')) newIntern = 'Checked by SME'; 
                               }
                               else if (row._normStatus === 'Checked') {
                                   newStatus = 'Final';
-                                  // biarkan newIntern apa adanya karena sudah bukan ranah progress
                               }
                               else if (row._normStatus === 'Final') {
                                   newStatus = 'Archived';
@@ -1213,7 +1212,7 @@ export default function App() {
                               else if (row._normStatus === 'Archived') {
                                   newStatus = 'On Progress';
                                   newIntern = currentIntern.replace('Checked', 'Progress');
-                                  if (!newIntern.includes('Progress')) newIntern = 'Progress by Celine';
+                                  if (!newIntern.includes('Progress')) newIntern = 'Progress by SME';
                               }
                               
                               handleMultipleCellEdits(row._originalIndex, {
@@ -1374,14 +1373,14 @@ export default function App() {
                           <button 
                             onClick={() => {
                               // SYNC LOGIC INTERN ➔ MAIN 
-                              // 6-State Cycle Sequence
+                              // 6-State Cycle Sequence starting with SME
                               const states = [
+                                'Progress by SME',
                                 'Progress by Celine', 
                                 'Progress by Diana', 
-                                'Progress by SME', 
+                                'Checked by SME', 
                                 'Checked by Celine', 
-                                'Checked by Diana', 
-                                'Checked by SME'
+                                'Checked by Diana'
                               ];
                               
                               let currentIdx = states.indexOf(internStatus);
@@ -1397,7 +1396,7 @@ export default function App() {
                               });
                             }}
                             className={`px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all w-[135px] flex items-center justify-center gap-1.5 border shadow-sm ${btnClass}`}
-                            title="Cycles: Prog Celine ➔ Prog Diana ➔ Prog SME ➔ Chk Celine ➔ Chk Diana ➔ Chk SME"
+                            title="Cycles: Prog SME ➔ Prog Celine ➔ Prog Diana ➔ Chk SME ➔ Chk Celine ➔ Chk Diana"
                           >
                             {internStatus.includes('Checked') ? <UserCheck size={12}/> : <History size={12}/>}
                             {getShortInternStatus(internStatus)}
