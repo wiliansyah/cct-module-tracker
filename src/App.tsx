@@ -25,10 +25,10 @@ import {
   Eye,
   EyeOff,
   Users,
+  GraduationCap,
   UserCheck,
-  Calendar,
-  Percent,
-  Link as LinkIcon
+  Link2,
+  Target
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAnalytics } from "firebase/analytics";
@@ -464,7 +464,7 @@ const DEFAULT_TSV = `No\tNama Module\tStatus\tGroup SBU/SFU\tLink Terbaru\tLink 
 408\tTutorial Pelaporan SPT Tahunan Karyawan dan Pemadanan NIK-NPWP\tUnchanged\t\t\t
 409\tVendor Management: VMT and Sales Guidance\tUnchanged\t\t\t`;
 
-// HRBP MAPPING LOGIC
+// HRBP MAPPING LOGIC (Updated: Andrew merged to Taufik)
 const getHRBP = (sbu: string) => {
   const s = (sbu || '').toLowerCase();
   if (s.includes('asset') || s.includes('charter')) return 'Akbar';
@@ -472,8 +472,7 @@ const getHRBP = (sbu: string) => {
   if (s.includes('corp') || s.includes('fin') || s.includes('acc') || s.includes('ga') || s.includes('hmm') || s.includes('hr') || s.includes('internal audit') || s.includes('legal') || s.includes('procurement')) return 'Sherly';
   if (s.includes('bpm') || s.includes('it')) return 'Berhard';
   if (s.includes('crewing') || s.includes('msm')) return 'Sentra';
-  if (s.includes('commercial') || s.includes('operation') || s.includes('trade') || s.includes('academy')) return 'Andrew';
-  if (s.includes('logistic') || s.includes('trucking')) return 'Taufik';
+  if (s.includes('commercial') || s.includes('operation') || s.includes('trade') || s.includes('academy') || s.includes('logistic') || s.includes('trucking')) return 'Taufik';
   if (s.includes('mtm') || s.includes('terminal') || s.includes('clc') || s.includes('msa')) return 'Ronny';
   return 'Unassigned';
 };
@@ -603,10 +602,21 @@ const EditableCell = ({ value, onSave, className, isLink, isTextArea = false }: 
   );
 };
 
+// Helper: Convert Intern Status for Main UI Display
+const getShortInternStatus = (status: string) => {
+  if (!status) return 'PROG: CELINE';
+  if (status === 'Progress by Celine') return 'PROG: CELINE';
+  if (status === 'Progress by Diana') return 'PROG: DIANA';
+  if (status === 'Progress by SME') return 'PROG: SME';
+  if (status === 'Checked by Celine') return 'CHK: CELINE';
+  if (status === 'Checked by Diana') return 'CHK: DIANA';
+  if (status === 'Checked by SME') return 'CHK: SME';
+  return status.toUpperCase().substring(0, 15);
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [moduleView, setModuleView] = useState('active'); // Default ke Active Only (jika tidak ada No Edit, tampilannya sama dengan All)
-  const [internViewFilter, setInternViewFilter] = useState('all');
 
   const [sortOrder, setSortOrder] = useState('default'); 
   const [rawData, setRawData] = useState(DEFAULT_TSV);
@@ -689,7 +699,6 @@ export default function App() {
 
       obj._linkNew = obj['Link Terbaru'] || null;
       obj._linkOld = obj['Link File Lama'] || null;
-      obj._linkIntern = obj['Link Intern'] || null;
       obj._order = parseInt(obj['No'] || obj['NO']) || 0;
       obj._originalIndex = idx + 1;
       
@@ -709,12 +718,14 @@ export default function App() {
       // Auto Assign HRBP
       obj._hrbp = getHRBP(sbu);
 
-      // Intern tracking specific metadata
-      obj._target = obj['Target'] || '';
-      obj._checkedBy = obj['Checked By'] || 'Intern'; // 'Intern' vs 'SME'
-      obj._internNotes = obj['Intern Notes'] || '';
-      const parsedProg = parseInt(obj['Progress (%)']);
-      obj._progressPct = !isNaN(parsedProg) ? parsedProg : (obj._normStatus === 'Final' ? 100 : obj._normStatus === 'Checked' ? 80 : 0);
+      // Defaulting Intern Status dynamically if not present
+      let internStateRaw = obj['Intern Status'] || '';
+      if (!internStateRaw) {
+         if (obj._normStatus === 'Checked') obj._internStatus = 'Checked by Celine';
+         else obj._internStatus = 'Progress by Celine';
+      } else {
+         obj._internStatus = internStateRaw;
+      }
 
       if (obj['Nama Module']) acc.push(obj);
       return acc;
@@ -761,9 +772,8 @@ export default function App() {
     const data = globallyFilteredData;
     let checkedCount = 0, finalCount = 0, unchangedCount = 0, archivedCount = 0;
     let activeTotal = 0; 
-    let checkedByInternCount = 0;
-    let checkedBySMECount = 0;
-    let totalProgressSum = 0;
+    let celineProg = 0, celineChk = 0, dianaProg = 0, dianaChk = 0;
+
     const sbuMap: Record<string, any> = {};
 
     data.forEach((d: any) => {
@@ -777,21 +787,23 @@ export default function App() {
       } else {
         activeTotal++;
         sbuMap[sbu].activeTotal += 1;
-        totalProgressSum += d._progressPct || 0;
         
         if (d._normStatus === 'Final') {
           finalCount++;
           sbuMap[sbu].final += 1;
-          if (d._checkedBy === 'SME') checkedBySMECount++;
-          else checkedByInternCount++;
         } else if (d._normStatus === 'Checked') {
           checkedCount++;
           sbuMap[sbu].checked += 1;
-          if (d._checkedBy === 'SME') checkedBySMECount++;
-          else checkedByInternCount++;
         } else if (d._normStatus === 'On Progress') {
           unchangedCount++;
         }
+
+        // Intern specific metrics
+        const iStatus = d._internStatus;
+        if (iStatus === 'Progress by Celine') celineProg++;
+        else if (iStatus === 'Checked by Celine') celineChk++;
+        else if (iStatus === 'Progress by Diana') dianaProg++;
+        else if (iStatus === 'Checked by Diana') dianaChk++;
       }
     });
     
@@ -804,7 +816,6 @@ export default function App() {
 
     // Percentage Calculation (Only tracking Active Modules)
     const checkRate = activeTotal > 0 ? (((checkedCount + finalCount) / activeTotal) * 100).toFixed(1) : 0;
-    const avgProgress = activeTotal > 0 ? Math.round(totalProgressSum / activeTotal) : 0;
 
     return {
       total: data.length, 
@@ -814,46 +825,28 @@ export default function App() {
       unchangedCount, 
       archivedCount, 
       checkRate, 
-      checkedByInternCount,
-      checkedBySMECount,
-      avgProgress,
-      sbuSummary
+      sbuSummary,
+      celineProg, celineChk, dianaProg, dianaChk
     };
   }, [globallyFilteredData]);
 
   const tableData = useMemo(() => {
     let baseData = globallyFilteredData;
     
-    // Logika filter tab Detail View
+    // Logika filter tab Detail View & Intern View
     if (moduleView === 'final') baseData = baseData.filter((d: any) => d._normStatus === 'Final');
     else if (moduleView === 'checked') baseData = baseData.filter((d: any) => d._normStatus === 'Checked');
     else if (moduleView === 'on_progress') baseData = baseData.filter((d: any) => d._normStatus === 'On Progress');
     else if (moduleView === 'archived') baseData = baseData.filter((d: any) => d._normStatus === 'Archived');
     else if (moduleView === 'active') baseData = baseData.filter((d: any) => d._normStatus !== 'Archived'); // Active Only
-    // jika 'all', tidak ada yang di filter (semua termasuk No Edit)
+    else if (moduleView === 'celine') baseData = baseData.filter((d: any) => (d._internStatus || '').includes('Celine') && d._normStatus !== 'Archived');
+    else if (moduleView === 'diana') baseData = baseData.filter((d: any) => (d._internStatus || '').includes('Diana') && d._normStatus !== 'Archived');
 
     if (sortOrder === 'default') baseData = [...baseData].sort((a: any, b: any) => a._order - b._order);
     else if (sortOrder === 'az') baseData = [...baseData].sort((a: any, b: any) => (a['Nama Module'] || '').localeCompare(b['Nama Module'] || ''));
     else if (sortOrder === 'za') baseData = [...baseData].sort((a: any, b: any) => (b['Nama Module'] || '').localeCompare(a['Nama Module'] || ''));
     return baseData;
   }, [globallyFilteredData, moduleView, sortOrder]);
-
-  const internTableData = useMemo(() => {
-    let baseData = globallyFilteredData;
-    if (internViewFilter === 'intern_checked') {
-      baseData = baseData.filter((d: any) => (d._normStatus === 'Checked' || d._normStatus === 'Final') && d._checkedBy === 'Intern');
-    } else if (internViewFilter === 'sme_checked') {
-      baseData = baseData.filter((d: any) => (d._normStatus === 'Checked' || d._normStatus === 'Final') && d._checkedBy === 'SME');
-    } else if (internViewFilter === 'on_progress') {
-      baseData = baseData.filter((d: any) => d._normStatus === 'On Progress');
-    } else if (internViewFilter === 'active') {
-      baseData = baseData.filter((d: any) => d._normStatus !== 'Archived');
-    }
-    if (sortOrder === 'default') baseData = [...baseData].sort((a: any, b: any) => a._order - b._order);
-    else if (sortOrder === 'az') baseData = [...baseData].sort((a: any, b: any) => (a['Nama Module'] || '').localeCompare(b['Nama Module'] || ''));
-    else if (sortOrder === 'za') baseData = [...baseData].sort((a: any, b: any) => (b['Nama Module'] || '').localeCompare(a['Nama Module'] || ''));
-    return baseData;
-  }, [globallyFilteredData, internViewFilter, sortOrder]);
 
   const handleSaveToCloud = async () => {
     if (!user) return;
@@ -877,7 +870,7 @@ export default function App() {
   const handleExportExcel = () => {
     if (tableData.length === 0) return;
     
-    const headers = ['No', 'Nama Module', 'Status', 'Group SBU/SFU', 'HRBP', 'Link Terbaru', 'Link File Lama', 'Link Intern', 'Checked By', 'Progress (%)', 'Target', 'Notes', 'Intern Notes'];
+    const headers = ['No', 'Nama Module', 'Status', 'Intern Status', 'Group SBU/SFU', 'HRBP', 'Link Terbaru', 'Link File Lama', 'Notes'];
     
     const escapeCSV = (val: any) => {
       if (val === null || val === undefined) return '""';
@@ -892,16 +885,12 @@ export default function App() {
         escapeCSV(row['No'] || row['NO']),
         escapeCSV(row['Nama Module']),
         escapeCSV(row._normStatus),
+        escapeCSV(row._internStatus),
         escapeCSV(row['Group SBU/SFU']),
         escapeCSV(row._hrbp),
         escapeCSV(row._linkNew),
         escapeCSV(row._linkOld),
-        escapeCSV(row._linkIntern),
-        escapeCSV(row._checkedBy),
-        escapeCSV(row._progressPct),
-        escapeCSV(row._target),
-        escapeCSV(row['Notes']),
-        escapeCSV(row._internNotes)
+        escapeCSV(row['Notes'])
       ];
       csvRows.push(rowData.join(','));
     });
@@ -918,32 +907,34 @@ export default function App() {
 
   const clearAllFilters = () => { setSearchFilter(""); setSbuFilter(""); setHrbpFilter(""); };
 
-  const handleCellEdit = async (originalIndex: number, headerFallback: string, newValue: string) => {
+  // CORE TSV UPDATE FUNCTION (SUPPORTS MULTIPLE COLUMN UPDATES AT ONCE)
+  const handleMultipleCellEdits = async (originalIndex: number, updates: Record<string, string>) => {
     const lines = rawData.split(/\r?\n/);
     if (!lines[0]) return;
     const headers = lines[0].split('\t').map((h: string) => h.trim());
     
-    let headerIndex = headers.indexOf(headerFallback);
-    if (headerIndex === -1 && headerFallback.toLowerCase() === 'no') {
-        headerIndex = headers.findIndex(h => h.toLowerCase() === 'no');
-    }
-    
-    if (headerIndex === -1) {
-        headers.push(headerFallback);
-        lines[0] = headers.join('\t');
-        headerIndex = headers.length - 1;
-    }
-
     const targetLine = lines[originalIndex];
     if (targetLine === undefined) return;
     
     const values = targetLine.split('\t');
     
-    while(values.length <= headerIndex) values.push('');
-    
-    values[headerIndex] = newValue;
+    Object.entries(updates).forEach(([headerFallback, newValue]) => {
+        let headerIndex = headers.indexOf(headerFallback);
+        if (headerIndex === -1 && headerFallback.toLowerCase() === 'no') {
+            headerIndex = headers.findIndex(h => h.toLowerCase() === 'no');
+        }
+        
+        if (headerIndex === -1) {
+            headers.push(headerFallback);
+            lines[0] = headers.join('\t');
+            headerIndex = headers.length - 1;
+        }
+
+        while(values.length <= headerIndex) values.push('');
+        values[headerIndex] = newValue;
+    });
+
     lines[originalIndex] = values.join('\t');
-    
     const newRawData = lines.join('\n');
     setRawData(newRawData);
 
@@ -959,6 +950,11 @@ export default function App() {
         setIsSaving(false);
       }
     }
+  };
+
+  // Wrapper for Single cell edit
+  const handleCellEdit = (originalIndex: number, headerFallback: string, newValue: string) => {
+    handleMultipleCellEdits(originalIndex, { [headerFallback]: newValue });
   };
 
   return (
@@ -984,7 +980,7 @@ export default function App() {
             {[ 
               { id: 'dashboard', label: 'Executive Dashboard', icon: LayoutDashboard },
               { id: 'modules', label: 'Detail View', icon: TableProperties },
-              { id: 'interns', label: 'Intern Tracker', icon: UserCheck },
+              { id: 'intern', label: 'Intern Tracker', icon: GraduationCap },
               { id: 'source', label: 'Source Data', icon: Upload }
             ].map(tab => (
               <button 
@@ -1000,7 +996,7 @@ export default function App() {
       </nav>
 
       {/* FILTER BAR */}
-      {(activeTab === 'dashboard' || activeTab === 'modules' || activeTab === 'interns') && (
+      {(activeTab === 'dashboard' || activeTab === 'modules' || activeTab === 'intern') && (
         <div className="h-[44px] bg-white border-b border-slate-100 flex-shrink-0 z-40 shadow-sm">
            <div className="h-full w-full px-4 flex items-center gap-3 overflow-x-auto no-scrollbar">
               <div className="flex items-center gap-1.5 mr-1 shrink-0">
@@ -1029,10 +1025,9 @@ export default function App() {
           
           <div className="h-full flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
             
-            {/* Top Stat Cards - Compact View (Clickable as Filters) */}
+            {/* Top Stat Cards - Compact View */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 shrink-0">
               {[
-                // Subval ditambahkan agar Total Library kelihatan di Card Active Modules
                 { label: 'Active Modules', val: metrics.activeTotal, subVal: `TOTAL: ${metrics.total}`, color: 'blue', icon: BookOpen, targetView: 'all' },
                 { label: 'Checked', val: metrics.checkedCount, color: 'indigo', icon: CheckCircle2, targetView: 'checked' },
                 { label: 'Final', val: metrics.finalCount, color: 'emerald', icon: ShieldCheck, targetView: 'final' },
@@ -1043,7 +1038,6 @@ export default function App() {
                 <div 
                   key={i} 
                   onClick={() => {
-                     // Navigasi yang lebih rapi menggunakan targetView
                      setModuleView(card.targetView);
                      setActiveTab('modules');
                   }}
@@ -1090,14 +1084,12 @@ export default function App() {
                       className="cursor-pointer bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1.5 hover:border-blue-400 hover:shadow-md transition-all group"
                       title={`Filter table by SBU: ${sbu.name}`}
                     >
-                      {/* Header: SBU Name */}
                       <div className="flex justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
                           <span className="text-[10px] font-black text-slate-800 truncate block uppercase leading-tight group-hover:text-blue-600 transition-colors">{sbu.name}</span>
                         </div>
                       </div>
                       
-                      {/* Detail: Active Modules & HRBP (ditambah rasio total agar transparan) */}
                       <div className="flex justify-between items-center mt-1">
                          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest" title={`Active Modul: ${sbu.activeTotal} dari Total Keseluruhan: ${sbu.total}`}>
                            {sbu.activeTotal} Active <span className="text-slate-300">/ {sbu.total}</span>
@@ -1105,7 +1097,6 @@ export default function App() {
                          <span className="text-[8px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-widest flex items-center gap-1"><Users size={8} /> {sbu.hrbp}</span>
                       </div>
                       
-                      {/* Progress Details - Hanya dihitung dari activeTotal (Total tanpa No Edit) */}
                       <div className="flex flex-col gap-1 mt-1">
                         <div className="flex items-center justify-between text-[8px] font-black uppercase tracking-widest">
                           <span className="text-indigo-600">Chk: {sbu.checked}</span>
@@ -1134,7 +1125,6 @@ export default function App() {
               <div className="flex flex-col md:flex-row border-b border-slate-200 bg-slate-50/50 shrink-0">
                 <div className="flex overflow-x-auto no-scrollbar flex-1 p-1">
                   {[
-                    // Tab filter sekarang dipisah antara Library (Total keseluruhan) dan Active (Dikurangi No Edit)
                     { id: 'all', label: 'Total (Library)', count: metrics.total, color: 'slate' },
                     { id: 'active', label: 'Active Only', count: metrics.activeTotal, color: 'blue' },
                     { id: 'checked', label: 'Checked', count: metrics.checkedCount, color: 'indigo' },
@@ -1173,7 +1163,7 @@ export default function App() {
                     <tr className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
                       <th className="px-5 py-3 w-12 text-center">NO</th>
                       <th className="px-5 py-3 min-w-[250px]">Nama Module</th>
-                      <th className="px-4 py-3 text-center">Status</th>
+                      <th className="px-4 py-3 text-center">Status (Sync)</th>
                       <th className="px-4 py-3">Group SBU</th>
                       <th className="px-4 py-3 text-center">HRBP</th>
                       <th className="px-5 py-3 text-center">Akses</th>
@@ -1181,7 +1171,10 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {tableData.map((row: any, idx: number) => (
+                    {tableData.map((row: any, idx: number) => {
+                      const shortInternText = getShortInternStatus(row._internStatus);
+                      
+                      return (
                       <tr key={idx} className="hover:bg-slate-50 transition-colors group">
                         <td className="px-5 py-2.5">
                           <EditableCell 
@@ -1201,14 +1194,34 @@ export default function App() {
                           <button 
                             onClick={() => {
                               let newStatus = 'Checked';
-                              if (row._normStatus === 'On Progress') newStatus = 'Checked';
-                              else if (row._normStatus === 'Checked') newStatus = 'Final';
-                              else if (row._normStatus === 'Final') newStatus = 'Archived';
-                              else if (row._normStatus === 'Archived') newStatus = 'On Progress';
+                              let currentIntern = row._internStatus || 'Progress by Celine';
+                              let newIntern = currentIntern;
+
+                              // SYNC LOGIC MAIN ➔ INTERN
+                              if (row._normStatus === 'On Progress') {
+                                  newStatus = 'Checked';
+                                  newIntern = currentIntern.replace('Progress', 'Checked');
+                                  if (!newIntern.includes('Checked')) newIntern = 'Checked by Celine'; // fallback jika sebelumnya undefined aneh
+                              }
+                              else if (row._normStatus === 'Checked') {
+                                  newStatus = 'Final';
+                                  // biarkan newIntern apa adanya karena sudah bukan ranah progress
+                              }
+                              else if (row._normStatus === 'Final') {
+                                  newStatus = 'Archived';
+                              }
+                              else if (row._normStatus === 'Archived') {
+                                  newStatus = 'On Progress';
+                                  newIntern = currentIntern.replace('Checked', 'Progress');
+                                  if (!newIntern.includes('Progress')) newIntern = 'Progress by Celine';
+                              }
                               
-                              handleCellEdit(row._originalIndex, 'Status', newStatus);
+                              handleMultipleCellEdits(row._originalIndex, {
+                                'Status': newStatus,
+                                'Intern Status': newIntern
+                              });
                             }}
-                            className={`px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all w-full flex items-center justify-center gap-1 border shadow-sm ${
+                            className={`px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all w-full flex items-center justify-center gap-1.5 border shadow-sm ${
                                row._normStatus === 'Final' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:shadow-md' :
                                row._normStatus === 'Checked' ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 hover:shadow-md' : 
                                row._normStatus === 'Archived' ? 'bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200 hover:shadow-md' :
@@ -1216,9 +1229,9 @@ export default function App() {
                             title="Click to toggle status (Progress -> Checked -> Final -> No Edit)"
                           >
                             {row._normStatus === 'Final' ? <><ShieldCheck size={12}/> FINAL</> : 
-                             row._normStatus === 'Checked' ? <><CheckCircle2 size={12}/> CHECKED</> : 
+                             row._normStatus === 'Checked' ? <><CheckCircle2 size={12}/> {shortInternText.replace('PROG', 'CHK')}</> : 
                              row._normStatus === 'Archived' ? <><EyeOff size={12}/> NO EDIT</> :
-                             <><History size={12}/> PROGRESS</>}
+                             <><History size={12}/> {shortInternText.replace('CHK', 'PROG')}</>}
                           </button>
                         </td>
                         <td className="px-4 py-2.5">
@@ -1255,7 +1268,7 @@ export default function App() {
                                   isLink={true}
                                 />
                               </div>
-                              {row._linkOld ? <a href={row._linkOld} target="_blank" rel="noreferrer" className="p-1 bg-slate-50 text-slate-500 rounded hover:bg-slate-600 hover:text-white shrink-0"><History size={10} /></a> : <div className="p-1 bg-slate-50 text-slate-300 rounded border border-slate-100 cursor-not-allowed"><ExternalLink size={10} /></div>}
+                              {row._linkOld ? <a href={row._linkOld} target="_blank" rel="noreferrer" className="p-1 bg-slate-50 text-slate-500 rounded hover:bg-slate-600 hover:text-white shrink-0"><History size={10} /></a> : <div className="p-1 bg-slate-50 text-slate-300 rounded border border-slate-100 cursor-not-allowed"><History size={10} /></div>}
                             </div>
                           </div>
                         </td>
@@ -1268,233 +1281,187 @@ export default function App() {
                           />
                         </td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>
             </section>
           </div>
 
-        ) : activeTab === 'interns' ? (
-          
-          /* INTERN PROGRESS TRACKER INTERFACE */
-          <div className="h-full flex flex-col gap-3 animate-in fade-in duration-300">
-            
-            {/* Top Stat Cards - Intern Specific KPI */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
-              <div 
-                onClick={() => setInternViewFilter('active')} 
-                className="cursor-pointer bg-white p-3 rounded-2xl border-l-4 border-l-blue-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[60px] hover:shadow-md transition-all"
-              >
-                <div className="flex justify-between items-start">
-                  <h3 className="text-[9px] font-black text-blue-600 uppercase tracking-widest">Active Modules</h3>
-                  <BookOpen size={12} className="text-blue-500 opacity-60" />
-                </div>
-                <div className="text-xl font-black text-slate-800 tracking-tighter leading-none">{metrics.activeTotal}</div>
-              </div>
+        ) : activeTab === 'intern' ? (
 
-              <div 
-                onClick={() => setInternViewFilter('intern_checked')} 
-                className="cursor-pointer bg-white p-3 rounded-2xl border-l-4 border-l-indigo-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[60px] hover:shadow-md transition-all"
-              >
-                <div className="flex justify-between items-start">
-                  <h3 className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Checked by Intern</h3>
-                  <UserCheck size={12} className="text-indigo-500 opacity-60" />
-                </div>
-                <div className="text-xl font-black text-slate-800 tracking-tighter leading-none">{metrics.checkedByInternCount}</div>
-              </div>
-
-              <div 
-                onClick={() => setInternViewFilter('sme_checked')} 
-                className="cursor-pointer bg-white p-3 rounded-2xl border-l-4 border-l-emerald-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[60px] hover:shadow-md transition-all"
-              >
-                <div className="flex justify-between items-start">
-                  <h3 className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Checked by SME</h3>
-                  <ShieldCheck size={12} className="text-emerald-500 opacity-60" />
-                </div>
-                <div className="text-xl font-black text-slate-800 tracking-tighter leading-none">{metrics.checkedBySMECount}</div>
-              </div>
-
-              <div className="bg-white p-3 rounded-2xl border-l-4 border-l-sky-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[60px]">
-                <div className="flex justify-between items-start">
-                  <h3 className="text-[9px] font-black text-sky-600 uppercase tracking-widest">Avg Progress</h3>
-                  <Percent size={12} className="text-sky-500 opacity-60" />
-                </div>
-                <div className="text-xl font-black text-slate-800 tracking-tighter leading-none">{metrics.avgProgress}%</div>
-              </div>
-            </div>
-
+          /* INTERN TRACKER TAB */
+          <div className="h-full flex flex-col animate-in fade-in duration-300">
             <section className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
-              <div className="flex flex-col md:flex-row border-b border-slate-200 bg-slate-50/50 shrink-0">
-                <div className="flex overflow-x-auto no-scrollbar flex-1 p-1">
+              <div className="flex flex-col md:flex-row border-b border-slate-200 bg-slate-50/50 shrink-0 justify-between items-center pr-4">
+                
+                <div className="flex overflow-x-auto no-scrollbar p-1 items-center">
                   {[
                     { id: 'all', label: 'All Modules', count: metrics.total, color: 'slate' },
-                    { id: 'active', label: 'Active Only', count: metrics.activeTotal, color: 'blue' },
-                    { id: 'intern_checked', label: 'Checked by Intern', count: metrics.checkedByInternCount, color: 'indigo' },
-                    { id: 'sme_checked', label: 'Checked by SME', count: metrics.checkedBySMECount, color: 'emerald' },
-                    { id: 'on_progress', label: 'In Progress', count: metrics.unchangedCount, color: 'amber' }
+                    { id: 'active', label: 'Active Tasks', count: metrics.activeTotal, color: 'blue' },
+                    { id: 'celine', label: "Celine's Tasks", count: metrics.celineProg + metrics.celineChk, color: 'pink' },
+                    { id: 'diana', label: "Diana's Tasks", count: metrics.dianaProg + metrics.dianaChk, color: 'purple' }
                   ].map(v => (
-                    <button key={v.id} onClick={() => setInternViewFilter(v.id)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${internViewFilter === v.id ? `bg-white text-${v.color}-600 shadow-sm border border-slate-200` : 'text-slate-400 hover:text-slate-800'}`}>
+                    <button key={v.id} onClick={() => setModuleView(v.id)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${moduleView === v.id ? `bg-white text-${v.color}-600 shadow-sm border border-slate-200` : 'text-slate-400 hover:text-slate-800'}`}>
                       {v.label} <span className={`ml-1 px-1.5 py-0.5 rounded-full bg-${v.color}-50 text-${v.color}-600 text-[8px]`}>{v.count}</span>
                     </button>
                   ))}
                 </div>
-                <div className="flex items-center px-4 py-2 md:py-0 border-t md:border-t-0 border-slate-200 gap-2 shrink-0 bg-white md:bg-transparent">
-                  <select value={sortOrder} onChange={(e: any) => setSortOrder(e.target.value)} className="bg-white border border-slate-300 text-slate-700 text-[9px] font-black uppercase rounded-lg px-2 h-[32px] outline-none shadow-sm">
-                    <option value="default">Default Sort</option>
-                    <option value="az">A-Z Name</option>
-                    <option value="za">Z-A Name</option>
-                  </select>
-                  <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2 ml-1">
-                    <button onClick={handleSaveToCloud} disabled={isSaving || !user} className="text-[9px] font-black text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-1.5 uppercase tracking-widest px-3 h-[32px] rounded-lg shadow-md transition-all active:scale-95 disabled:opacity-70" title="Sync Changes to Cloud">
-                      {isSaving ? <RefreshCw size={11} className="animate-spin" /> : <Save size={11}/>} Sync
-                    </button>
-                    <button onClick={handleExportExcel} className="text-[9px] font-black text-white bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1.5 uppercase tracking-widest px-3 h-[32px] rounded-lg shadow-md transition-all active:scale-95" title="Export Filtered Data to Excel">
-                      <FileSpreadsheet size={12}/> Excel
-                    </button>
-                  </div>
+
+                {/* Dashboard Mini Intern */}
+                <div className="hidden lg:flex items-center gap-4 text-[9px] font-bold uppercase tracking-widest pl-4 py-2">
+                   <div className="flex items-center gap-2 bg-pink-50/50 px-3 py-1.5 rounded-lg border border-pink-100">
+                      <span className="text-pink-400">Celine:</span>
+                      <span className="text-amber-500">{metrics.celineProg} Prog</span>
+                      <span className="text-slate-300">|</span>
+                      <span className="text-indigo-500">{metrics.celineChk} Chk</span>
+                   </div>
+                   <div className="flex items-center gap-2 bg-purple-50/50 px-3 py-1.5 rounded-lg border border-purple-100">
+                      <span className="text-purple-400">Diana:</span>
+                      <span className="text-amber-500">{metrics.dianaProg} Prog</span>
+                      <span className="text-slate-300">|</span>
+                      <span className="text-indigo-500">{metrics.dianaChk} Chk</span>
+                   </div>
                 </div>
+
               </div>
 
               <div className="flex-1 overflow-auto custom-scrollbar relative bg-white">
                 <table className="w-full text-left border-collapse min-w-[1050px]">
                   <thead className="sticky top-0 z-20 bg-slate-50 shadow-sm border-b border-slate-200">
                     <tr className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                      <th className="px-4 py-3 w-12 text-center">NO</th>
-                      <th className="px-4 py-3 min-w-[220px]">Nama Module & SBU</th>
-                      <th className="px-4 py-3 text-center min-w-[140px]">Status & Checked By</th>
-                      <th className="px-4 py-3 min-w-[160px]">Progress Bar & Target</th>
-                      <th className="px-4 py-3 min-w-[200px]">Links (3 Repositories)</th>
-                      <th className="px-4 py-3 min-w-[180px]">Intern Notes / Comments</th>
+                      <th className="px-4 py-3 w-10 text-center">NO</th>
+                      <th className="px-4 py-3 min-w-[180px]">Nama Module</th>
+                      <th className="px-4 py-3 text-center">Main Status</th>
+                      <th className="px-4 py-3 text-center">Intern 6-State Flow</th>
+                      <th className="px-4 py-3 text-center">Progress Bar</th>
+                      <th className="px-4 py-3 min-w-[100px]">Target</th>
+                      <th className="px-4 py-3 min-w-[200px] text-center">Embedded & Cloud Links</th>
+                      <th className="px-4 py-3 min-w-[180px]">Intern Notes</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {internTableData.map((row: any, idx: number) => (
+                    {tableData.map((row: any, idx: number) => {
+                      const internStatus = row._internStatus;
+                      const progressVal = Math.min(100, Math.max(0, parseInt(row['Intern Progress']) || 0));
+
+                      // Styling Toggle Button
+                      let btnClass = 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100';
+                      if (internStatus.includes('Celine')) btnClass = 'bg-pink-50 text-pink-700 border-pink-200 hover:bg-pink-100';
+                      else if (internStatus.includes('Diana')) btnClass = 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100';
+                      else if (internStatus.includes('SME')) btnClass = 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100';
+
+                      return (
                       <tr key={idx} className="hover:bg-slate-50 transition-colors group">
-                        <td className="px-4 py-2.5 text-center font-bold text-slate-400">
-                          {row['No'] || row['NO']}
+                        <td className="px-4 py-2.5">
+                          <span className="text-[10px] text-center font-bold text-slate-400 block">{row['No'] || row['NO']}</span>
                         </td>
                         <td className="px-4 py-2.5">
-                          <div className="font-black text-slate-800 text-[11px] uppercase leading-tight">{row['Nama Module']}</div>
-                          <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{row['Group SBU/SFU'] || 'General'} — HRBP: <span className="text-blue-600">{row._hrbp}</span></div>
+                          <span className="text-[10px] font-black text-slate-800 uppercase block leading-tight">{row['Nama Module']}</span>
+                          <span className="text-[8px] font-bold text-slate-400 uppercase mt-1 block">{row['Group SBU/SFU']}</span>
                         </td>
-                        <td className="px-4 py-2.5 flex flex-col items-center justify-center gap-1">
-                          <button 
-                            onClick={() => {
-                              let newStatus = 'Checked';
-                              if (row._normStatus === 'On Progress') newStatus = 'Checked';
-                              else if (row._normStatus === 'Checked') newStatus = 'Final';
-                              else if (row._normStatus === 'Final') newStatus = 'Archived';
-                              else if (row._normStatus === 'Archived') newStatus = 'On Progress';
-                              
-                              handleCellEdit(row._originalIndex, 'Status', newStatus);
-                            }}
-                            className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all w-full flex items-center justify-center gap-1 border shadow-sm ${
+                        <td className="px-4 py-2.5 text-center">
+                          <span className={`px-2 py-1 rounded text-[8px] font-black uppercase tracking-widest border inline-flex items-center gap-1 ${
                                row._normStatus === 'Final' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                                row._normStatus === 'Checked' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 
                                row._normStatus === 'Archived' ? 'bg-slate-100 text-slate-500 border-slate-300' :
                                'bg-amber-50 text-amber-700 border-amber-200'}`}
                           >
-                            {row._normStatus === 'Final' ? <><ShieldCheck size={11}/> FINAL</> : 
-                             row._normStatus === 'Checked' ? <><CheckCircle2 size={11}/> CHECKED</> : 
-                             row._normStatus === 'Archived' ? <><EyeOff size={11}/> NO EDIT</> :
-                             <><History size={11}/> PROGRESS</>}
+                             {row._normStatus}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 flex justify-center">
+                          <button 
+                            onClick={() => {
+                              // SYNC LOGIC INTERN ➔ MAIN 
+                              // 6-State Cycle Sequence
+                              const states = [
+                                'Progress by Celine', 
+                                'Progress by Diana', 
+                                'Progress by SME', 
+                                'Checked by Celine', 
+                                'Checked by Diana', 
+                                'Checked by SME'
+                              ];
+                              
+                              let currentIdx = states.indexOf(internStatus);
+                              if (currentIdx === -1) currentIdx = -1; // Default
+                              
+                              const nextIntern = states[(currentIdx + 1) % states.length];
+                              const nextMain = nextIntern.includes('Checked') ? 'Checked' : 'On Progress';
+                              
+                              // Menulis keduanya (Batch update dalam 1 aksi ke Firebase)
+                              handleMultipleCellEdits(row._originalIndex, {
+                                 'Intern Status': nextIntern,
+                                 'Status': nextMain
+                              });
+                            }}
+                            className={`px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all w-[135px] flex items-center justify-center gap-1.5 border shadow-sm ${btnClass}`}
+                            title="Cycles: Prog Celine ➔ Prog Diana ➔ Prog SME ➔ Chk Celine ➔ Chk Diana ➔ Chk SME"
+                          >
+                            {internStatus.includes('Checked') ? <UserCheck size={12}/> : <History size={12}/>}
+                            {getShortInternStatus(internStatus)}
                           </button>
-
-                          {(row._normStatus === 'Checked' || row._normStatus === 'Final') && (
-                            <div className="flex bg-slate-100 p-0.5 rounded-md border border-slate-200 w-full">
-                              <button
-                                type="button"
-                                onClick={() => handleCellEdit(row._originalIndex, 'Checked By', 'Intern')}
-                                className={`flex-1 py-0.5 rounded text-[8px] font-black uppercase transition-all ${row._checkedBy === 'Intern' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
-                              >
-                                By Intern
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleCellEdit(row._originalIndex, 'Checked By', 'SME')}
-                                className={`flex-1 py-0.5 rounded text-[8px] font-black uppercase transition-all ${row._checkedBy === 'SME' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
-                              >
-                                By SME
-                              </button>
-                            </div>
-                          )}
                         </td>
                         <td className="px-4 py-2.5">
-                          <div className="flex flex-col gap-1.5">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-[9px] font-black text-slate-700">{row._progressPct}%</span>
-                              <input 
-                                type="range" 
-                                min="0" 
-                                max="100" 
-                                step="5"
-                                value={row._progressPct}
-                                onChange={(e: any) => handleCellEdit(row._originalIndex, 'Progress (%)', e.target.value)}
-                                className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                              />
+                          <div className="flex flex-col items-center gap-1.5 w-24 mx-auto">
+                            <div className="flex items-center justify-center gap-1">
+                               <EditableCell value={row['Intern Progress'] || '0'} onSave={(val: string) => handleCellEdit(row._originalIndex, 'Intern Progress', val)} className="text-center font-black text-slate-700 w-8 border-b border-dashed border-slate-300" />
+                               <span className="text-[10px] font-black text-slate-400">%</span>
                             </div>
-                            <div className="flex items-center gap-1 text-[9px]">
-                              <Calendar size={11} className="text-slate-400 shrink-0" />
-                              <span className="text-[8px] font-bold text-slate-400 uppercase">Target:</span>
-                              <EditableCell 
-                                value={row._target} 
-                                onSave={(val: string) => handleCellEdit(row._originalIndex, 'Target', val)}
-                                className="font-bold text-slate-700 flex-1"
-                              />
+                            <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden shadow-inner">
+                              <div className="h-full bg-blue-500 transition-all duration-300 ease-out" style={{ width: `${progressVal}%` }}></div>
                             </div>
                           </div>
                         </td>
                         <td className="px-4 py-2.5">
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center justify-between gap-1.5">
-                              <span className="text-[7px] font-black text-blue-600 bg-blue-50 px-1 rounded uppercase">NEW</span>
+                           <div className="bg-white border border-slate-200 rounded-lg flex items-center p-1 shadow-sm">
+                             <Target size={12} className="text-rose-400 ml-1 mr-1.5 shrink-0" />
+                             <EditableCell 
+                                value={row['Intern Target'] || ''} 
+                                onSave={(val: string) => handleCellEdit(row._originalIndex, 'Intern Target', val)}
+                                className="text-[10px] text-slate-700 font-bold flex-1"
+                             />
+                           </div>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex flex-col gap-1.5 text-[9px]">
+                            {/* Main Link 1 */}
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-slate-400 w-8">NEW:</span>
                               <div className="flex-1 min-w-0">
-                                <EditableCell 
-                                  value={row['Link Terbaru']} 
-                                  onSave={(val: string) => handleCellEdit(row._originalIndex, 'Link Terbaru', val)}
-                                  className="text-blue-600"
-                                  isLink={true}
-                                />
+                                <EditableCell value={row['Link Terbaru']} onSave={(val: string) => handleCellEdit(row._originalIndex, 'Link Terbaru', val)} className="text-blue-500" isLink={true} />
                               </div>
-                              {row._linkNew ? <a href={row._linkNew} target="_blank" rel="noreferrer" className="p-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-600 hover:text-white shrink-0"><ExternalLink size={10} /></a> : <div className="p-1 bg-slate-50 text-slate-300 rounded border border-slate-100 cursor-not-allowed"><ExternalLink size={10} /></div>}
+                              {row._linkNew ? <a href={row._linkNew} target="_blank" rel="noreferrer" className="p-1 bg-blue-50 text-blue-600 rounded shrink-0 hover:bg-blue-600 hover:text-white"><ExternalLink size={10} /></a> : <div className="p-1 text-slate-300 shrink-0"><ExternalLink size={10} /></div>}
                             </div>
-                            <div className="flex items-center justify-between gap-1.5">
-                              <span className="text-[7px] font-black text-slate-500 bg-slate-100 px-1 rounded uppercase">OLD</span>
+                            {/* Main Link 2 */}
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-slate-400 w-8">OLD:</span>
                               <div className="flex-1 min-w-0">
-                                <EditableCell 
-                                  value={row['Link File Lama']} 
-                                  onSave={(val: string) => handleCellEdit(row._originalIndex, 'Link File Lama', val)}
-                                  className="text-slate-600"
-                                  isLink={true}
-                                />
+                                <EditableCell value={row['Link File Lama']} onSave={(val: string) => handleCellEdit(row._originalIndex, 'Link File Lama', val)} className="text-slate-500" isLink={true} />
                               </div>
-                              {row._linkOld ? <a href={row._linkOld} target="_blank" rel="noreferrer" className="p-1 bg-slate-50 text-slate-500 rounded hover:bg-slate-600 hover:text-white shrink-0"><ExternalLink size={10} /></a> : <div className="p-1 bg-slate-50 text-slate-300 rounded border border-slate-100 cursor-not-allowed"><ExternalLink size={10} /></div>}
+                              {row._linkOld ? <a href={row._linkOld} target="_blank" rel="noreferrer" className="p-1 bg-slate-50 text-slate-500 rounded shrink-0 hover:bg-slate-600 hover:text-white"><History size={10} /></a> : <div className="p-1 text-slate-300 shrink-0"><History size={10} /></div>}
                             </div>
-                            <div className="flex items-center justify-between gap-1.5">
-                              <span className="text-[7px] font-black text-indigo-600 bg-indigo-50 px-1 rounded uppercase">WORK</span>
+                            {/* New Embedded Link for Intern */}
+                            <div className="flex items-center justify-between gap-2 pt-1.5 mt-0.5 border-t border-slate-100">
+                              <span className="font-bold text-indigo-400 w-8 tracking-widest">EMB:</span>
                               <div className="flex-1 min-w-0">
-                                <EditableCell 
-                                  value={row['Link Intern']} 
-                                  onSave={(val: string) => handleCellEdit(row._originalIndex, 'Link Intern', val)}
-                                  className="text-indigo-600 font-bold"
-                                  isLink={true}
-                                />
+                                <EditableCell value={row['Link Embedded']} onSave={(val: string) => handleCellEdit(row._originalIndex, 'Link Embedded', val)} className="text-indigo-500" isLink={true} />
                               </div>
-                              {row._linkIntern ? <a href={row._linkIntern} target="_blank" rel="noreferrer" className="p-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-600 hover:text-white shrink-0"><ExternalLink size={10} /></a> : <div className="p-1 bg-slate-50 text-slate-300 rounded border border-slate-100 cursor-not-allowed"><ExternalLink size={10} /></div>}
+                              {row['Link Embedded'] ? <a href={row['Link Embedded']} target="_blank" rel="noreferrer" className="p-1 bg-indigo-50 text-indigo-600 rounded shrink-0 hover:bg-indigo-600 hover:text-white"><Link2 size={10} /></a> : <div className="p-1 text-slate-300 shrink-0"><Link2 size={10} /></div>}
                             </div>
                           </div>
                         </td>
                         <td className="px-4 py-2.5 align-top">
                           <EditableCell 
-                            value={row._internNotes || ''} 
+                            value={row['Intern Notes'] || ''} 
                             onSave={(val: string) => handleCellEdit(row._originalIndex, 'Intern Notes', val)}
                             isTextArea={true}
-                            className="text-slate-700 text-[10px] font-medium whitespace-pre-wrap min-h-[40px] bg-white border border-slate-200 rounded-md !p-2 leading-relaxed"
+                            className="text-slate-700 text-[10px] font-medium whitespace-pre-wrap min-h-[50px] bg-amber-50/50 border border-amber-200/60 rounded-md !p-2 leading-relaxed"
                           />
                         </td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>
