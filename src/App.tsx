@@ -24,7 +24,11 @@ import {
   Activity,
   Eye,
   EyeOff,
-  Users
+  Users,
+  UserCheck,
+  Calendar,
+  Percent,
+  Link as LinkIcon
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAnalytics } from "firebase/analytics";
@@ -602,6 +606,7 @@ const EditableCell = ({ value, onSave, className, isLink, isTextArea = false }: 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [moduleView, setModuleView] = useState('active'); // Default ke Active Only (jika tidak ada No Edit, tampilannya sama dengan All)
+  const [internViewFilter, setInternViewFilter] = useState('all');
 
   const [sortOrder, setSortOrder] = useState('default'); 
   const [rawData, setRawData] = useState(DEFAULT_TSV);
@@ -684,6 +689,7 @@ export default function App() {
 
       obj._linkNew = obj['Link Terbaru'] || null;
       obj._linkOld = obj['Link File Lama'] || null;
+      obj._linkIntern = obj['Link Intern'] || null;
       obj._order = parseInt(obj['No'] || obj['NO']) || 0;
       obj._originalIndex = idx + 1;
       
@@ -702,6 +708,13 @@ export default function App() {
 
       // Auto Assign HRBP
       obj._hrbp = getHRBP(sbu);
+
+      // Intern tracking specific metadata
+      obj._target = obj['Target'] || '';
+      obj._checkedBy = obj['Checked By'] || 'Intern'; // 'Intern' vs 'SME'
+      obj._internNotes = obj['Intern Notes'] || '';
+      const parsedProg = parseInt(obj['Progress (%)']);
+      obj._progressPct = !isNaN(parsedProg) ? parsedProg : (obj._normStatus === 'Final' ? 100 : obj._normStatus === 'Checked' ? 80 : 0);
 
       if (obj['Nama Module']) acc.push(obj);
       return acc;
@@ -748,6 +761,9 @@ export default function App() {
     const data = globallyFilteredData;
     let checkedCount = 0, finalCount = 0, unchangedCount = 0, archivedCount = 0;
     let activeTotal = 0; 
+    let checkedByInternCount = 0;
+    let checkedBySMECount = 0;
+    let totalProgressSum = 0;
     const sbuMap: Record<string, any> = {};
 
     data.forEach((d: any) => {
@@ -761,13 +777,18 @@ export default function App() {
       } else {
         activeTotal++;
         sbuMap[sbu].activeTotal += 1;
+        totalProgressSum += d._progressPct || 0;
         
         if (d._normStatus === 'Final') {
           finalCount++;
           sbuMap[sbu].final += 1;
+          if (d._checkedBy === 'SME') checkedBySMECount++;
+          else checkedByInternCount++;
         } else if (d._normStatus === 'Checked') {
           checkedCount++;
           sbuMap[sbu].checked += 1;
+          if (d._checkedBy === 'SME') checkedBySMECount++;
+          else checkedByInternCount++;
         } else if (d._normStatus === 'On Progress') {
           unchangedCount++;
         }
@@ -783,6 +804,7 @@ export default function App() {
 
     // Percentage Calculation (Only tracking Active Modules)
     const checkRate = activeTotal > 0 ? (((checkedCount + finalCount) / activeTotal) * 100).toFixed(1) : 0;
+    const avgProgress = activeTotal > 0 ? Math.round(totalProgressSum / activeTotal) : 0;
 
     return {
       total: data.length, 
@@ -792,6 +814,9 @@ export default function App() {
       unchangedCount, 
       archivedCount, 
       checkRate, 
+      checkedByInternCount,
+      checkedBySMECount,
+      avgProgress,
       sbuSummary
     };
   }, [globallyFilteredData]);
@@ -812,6 +837,23 @@ export default function App() {
     else if (sortOrder === 'za') baseData = [...baseData].sort((a: any, b: any) => (b['Nama Module'] || '').localeCompare(a['Nama Module'] || ''));
     return baseData;
   }, [globallyFilteredData, moduleView, sortOrder]);
+
+  const internTableData = useMemo(() => {
+    let baseData = globallyFilteredData;
+    if (internViewFilter === 'intern_checked') {
+      baseData = baseData.filter((d: any) => (d._normStatus === 'Checked' || d._normStatus === 'Final') && d._checkedBy === 'Intern');
+    } else if (internViewFilter === 'sme_checked') {
+      baseData = baseData.filter((d: any) => (d._normStatus === 'Checked' || d._normStatus === 'Final') && d._checkedBy === 'SME');
+    } else if (internViewFilter === 'on_progress') {
+      baseData = baseData.filter((d: any) => d._normStatus === 'On Progress');
+    } else if (internViewFilter === 'active') {
+      baseData = baseData.filter((d: any) => d._normStatus !== 'Archived');
+    }
+    if (sortOrder === 'default') baseData = [...baseData].sort((a: any, b: any) => a._order - b._order);
+    else if (sortOrder === 'az') baseData = [...baseData].sort((a: any, b: any) => (a['Nama Module'] || '').localeCompare(b['Nama Module'] || ''));
+    else if (sortOrder === 'za') baseData = [...baseData].sort((a: any, b: any) => (b['Nama Module'] || '').localeCompare(a['Nama Module'] || ''));
+    return baseData;
+  }, [globallyFilteredData, internViewFilter, sortOrder]);
 
   const handleSaveToCloud = async () => {
     if (!user) return;
@@ -835,7 +877,7 @@ export default function App() {
   const handleExportExcel = () => {
     if (tableData.length === 0) return;
     
-    const headers = ['No', 'Nama Module', 'Status', 'Group SBU/SFU', 'HRBP', 'Link Terbaru', 'Link File Lama', 'Notes'];
+    const headers = ['No', 'Nama Module', 'Status', 'Group SBU/SFU', 'HRBP', 'Link Terbaru', 'Link File Lama', 'Link Intern', 'Checked By', 'Progress (%)', 'Target', 'Notes', 'Intern Notes'];
     
     const escapeCSV = (val: any) => {
       if (val === null || val === undefined) return '""';
@@ -854,7 +896,12 @@ export default function App() {
         escapeCSV(row._hrbp),
         escapeCSV(row._linkNew),
         escapeCSV(row._linkOld),
-        escapeCSV(row['Notes'])
+        escapeCSV(row._linkIntern),
+        escapeCSV(row._checkedBy),
+        escapeCSV(row._progressPct),
+        escapeCSV(row._target),
+        escapeCSV(row['Notes']),
+        escapeCSV(row._internNotes)
       ];
       csvRows.push(rowData.join(','));
     });
@@ -937,6 +984,7 @@ export default function App() {
             {[ 
               { id: 'dashboard', label: 'Executive Dashboard', icon: LayoutDashboard },
               { id: 'modules', label: 'Detail View', icon: TableProperties },
+              { id: 'interns', label: 'Intern Tracker', icon: UserCheck },
               { id: 'source', label: 'Source Data', icon: Upload }
             ].map(tab => (
               <button 
@@ -952,7 +1000,7 @@ export default function App() {
       </nav>
 
       {/* FILTER BAR */}
-      {(activeTab === 'dashboard' || activeTab === 'modules') && (
+      {(activeTab === 'dashboard' || activeTab === 'modules' || activeTab === 'interns') && (
         <div className="h-[44px] bg-white border-b border-slate-100 flex-shrink-0 z-40 shadow-sm">
            <div className="h-full w-full px-4 flex items-center gap-3 overflow-x-auto no-scrollbar">
               <div className="flex items-center gap-1.5 mr-1 shrink-0">
@@ -1207,7 +1255,7 @@ export default function App() {
                                   isLink={true}
                                 />
                               </div>
-                              {row._linkOld ? <a href={row._linkOld} target="_blank" rel="noreferrer" className="p-1 bg-slate-50 text-slate-500 rounded hover:bg-slate-600 hover:text-white shrink-0"><History size={10} /></a> : <div className="p-1 bg-slate-50 text-slate-300 rounded border border-slate-100 cursor-not-allowed"><History size={10} /></div>}
+                              {row._linkOld ? <a href={row._linkOld} target="_blank" rel="noreferrer" className="p-1 bg-slate-50 text-slate-500 rounded hover:bg-slate-600 hover:text-white shrink-0"><History size={10} /></a> : <div className="p-1 bg-slate-50 text-slate-300 rounded border border-slate-100 cursor-not-allowed"><ExternalLink size={10} /></div>}
                             </div>
                           </div>
                         </td>
@@ -1217,6 +1265,232 @@ export default function App() {
                             onSave={(val: string) => handleCellEdit(row._originalIndex, 'Notes', val)}
                             isTextArea={true}
                             className="text-slate-600 text-[10px] font-medium whitespace-pre-wrap min-h-[40px] bg-white border border-slate-200 rounded-md !p-2 leading-relaxed"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+        ) : activeTab === 'interns' ? (
+          
+          /* INTERN PROGRESS TRACKER INTERFACE */
+          <div className="h-full flex flex-col gap-3 animate-in fade-in duration-300">
+            
+            {/* Top Stat Cards - Intern Specific KPI */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
+              <div 
+                onClick={() => setInternViewFilter('active')} 
+                className="cursor-pointer bg-white p-3 rounded-2xl border-l-4 border-l-blue-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[60px] hover:shadow-md transition-all"
+              >
+                <div className="flex justify-between items-start">
+                  <h3 className="text-[9px] font-black text-blue-600 uppercase tracking-widest">Active Modules</h3>
+                  <BookOpen size={12} className="text-blue-500 opacity-60" />
+                </div>
+                <div className="text-xl font-black text-slate-800 tracking-tighter leading-none">{metrics.activeTotal}</div>
+              </div>
+
+              <div 
+                onClick={() => setInternViewFilter('intern_checked')} 
+                className="cursor-pointer bg-white p-3 rounded-2xl border-l-4 border-l-indigo-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[60px] hover:shadow-md transition-all"
+              >
+                <div className="flex justify-between items-start">
+                  <h3 className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Checked by Intern</h3>
+                  <UserCheck size={12} className="text-indigo-500 opacity-60" />
+                </div>
+                <div className="text-xl font-black text-slate-800 tracking-tighter leading-none">{metrics.checkedByInternCount}</div>
+              </div>
+
+              <div 
+                onClick={() => setInternViewFilter('sme_checked')} 
+                className="cursor-pointer bg-white p-3 rounded-2xl border-l-4 border-l-emerald-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[60px] hover:shadow-md transition-all"
+              >
+                <div className="flex justify-between items-start">
+                  <h3 className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Checked by SME</h3>
+                  <ShieldCheck size={12} className="text-emerald-500 opacity-60" />
+                </div>
+                <div className="text-xl font-black text-slate-800 tracking-tighter leading-none">{metrics.checkedBySMECount}</div>
+              </div>
+
+              <div className="bg-white p-3 rounded-2xl border-l-4 border-l-sky-500 border-y border-r border-slate-200 shadow-sm flex flex-col justify-between h-[60px]">
+                <div className="flex justify-between items-start">
+                  <h3 className="text-[9px] font-black text-sky-600 uppercase tracking-widest">Avg Progress</h3>
+                  <Percent size={12} className="text-sky-500 opacity-60" />
+                </div>
+                <div className="text-xl font-black text-slate-800 tracking-tighter leading-none">{metrics.avgProgress}%</div>
+              </div>
+            </div>
+
+            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="flex flex-col md:flex-row border-b border-slate-200 bg-slate-50/50 shrink-0">
+                <div className="flex overflow-x-auto no-scrollbar flex-1 p-1">
+                  {[
+                    { id: 'all', label: 'All Modules', count: metrics.total, color: 'slate' },
+                    { id: 'active', label: 'Active Only', count: metrics.activeTotal, color: 'blue' },
+                    { id: 'intern_checked', label: 'Checked by Intern', count: metrics.checkedByInternCount, color: 'indigo' },
+                    { id: 'sme_checked', label: 'Checked by SME', count: metrics.checkedBySMECount, color: 'emerald' },
+                    { id: 'on_progress', label: 'In Progress', count: metrics.unchangedCount, color: 'amber' }
+                  ].map(v => (
+                    <button key={v.id} onClick={() => setInternViewFilter(v.id)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${internViewFilter === v.id ? `bg-white text-${v.color}-600 shadow-sm border border-slate-200` : 'text-slate-400 hover:text-slate-800'}`}>
+                      {v.label} <span className={`ml-1 px-1.5 py-0.5 rounded-full bg-${v.color}-50 text-${v.color}-600 text-[8px]`}>{v.count}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center px-4 py-2 md:py-0 border-t md:border-t-0 border-slate-200 gap-2 shrink-0 bg-white md:bg-transparent">
+                  <select value={sortOrder} onChange={(e: any) => setSortOrder(e.target.value)} className="bg-white border border-slate-300 text-slate-700 text-[9px] font-black uppercase rounded-lg px-2 h-[32px] outline-none shadow-sm">
+                    <option value="default">Default Sort</option>
+                    <option value="az">A-Z Name</option>
+                    <option value="za">Z-A Name</option>
+                  </select>
+                  <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2 ml-1">
+                    <button onClick={handleSaveToCloud} disabled={isSaving || !user} className="text-[9px] font-black text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-1.5 uppercase tracking-widest px-3 h-[32px] rounded-lg shadow-md transition-all active:scale-95 disabled:opacity-70" title="Sync Changes to Cloud">
+                      {isSaving ? <RefreshCw size={11} className="animate-spin" /> : <Save size={11}/>} Sync
+                    </button>
+                    <button onClick={handleExportExcel} className="text-[9px] font-black text-white bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1.5 uppercase tracking-widest px-3 h-[32px] rounded-lg shadow-md transition-all active:scale-95" title="Export Filtered Data to Excel">
+                      <FileSpreadsheet size={12}/> Excel
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-auto custom-scrollbar relative bg-white">
+                <table className="w-full text-left border-collapse min-w-[1050px]">
+                  <thead className="sticky top-0 z-20 bg-slate-50 shadow-sm border-b border-slate-200">
+                    <tr className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                      <th className="px-4 py-3 w-12 text-center">NO</th>
+                      <th className="px-4 py-3 min-w-[220px]">Nama Module & SBU</th>
+                      <th className="px-4 py-3 text-center min-w-[140px]">Status & Checked By</th>
+                      <th className="px-4 py-3 min-w-[160px]">Progress Bar & Target</th>
+                      <th className="px-4 py-3 min-w-[200px]">Links (3 Repositories)</th>
+                      <th className="px-4 py-3 min-w-[180px]">Intern Notes / Comments</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {internTableData.map((row: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-slate-50 transition-colors group">
+                        <td className="px-4 py-2.5 text-center font-bold text-slate-400">
+                          {row['No'] || row['NO']}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <div className="font-black text-slate-800 text-[11px] uppercase leading-tight">{row['Nama Module']}</div>
+                          <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{row['Group SBU/SFU'] || 'General'} — HRBP: <span className="text-blue-600">{row._hrbp}</span></div>
+                        </td>
+                        <td className="px-4 py-2.5 flex flex-col items-center justify-center gap-1">
+                          <button 
+                            onClick={() => {
+                              let newStatus = 'Checked';
+                              if (row._normStatus === 'On Progress') newStatus = 'Checked';
+                              else if (row._normStatus === 'Checked') newStatus = 'Final';
+                              else if (row._normStatus === 'Final') newStatus = 'Archived';
+                              else if (row._normStatus === 'Archived') newStatus = 'On Progress';
+                              
+                              handleCellEdit(row._originalIndex, 'Status', newStatus);
+                            }}
+                            className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all w-full flex items-center justify-center gap-1 border shadow-sm ${
+                               row._normStatus === 'Final' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                               row._normStatus === 'Checked' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 
+                               row._normStatus === 'Archived' ? 'bg-slate-100 text-slate-500 border-slate-300' :
+                               'bg-amber-50 text-amber-700 border-amber-200'}`}
+                          >
+                            {row._normStatus === 'Final' ? <><ShieldCheck size={11}/> FINAL</> : 
+                             row._normStatus === 'Checked' ? <><CheckCircle2 size={11}/> CHECKED</> : 
+                             row._normStatus === 'Archived' ? <><EyeOff size={11}/> NO EDIT</> :
+                             <><History size={11}/> PROGRESS</>}
+                          </button>
+
+                          {(row._normStatus === 'Checked' || row._normStatus === 'Final') && (
+                            <div className="flex bg-slate-100 p-0.5 rounded-md border border-slate-200 w-full">
+                              <button
+                                type="button"
+                                onClick={() => handleCellEdit(row._originalIndex, 'Checked By', 'Intern')}
+                                className={`flex-1 py-0.5 rounded text-[8px] font-black uppercase transition-all ${row._checkedBy === 'Intern' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                              >
+                                By Intern
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCellEdit(row._originalIndex, 'Checked By', 'SME')}
+                                className={`flex-1 py-0.5 rounded text-[8px] font-black uppercase transition-all ${row._checkedBy === 'SME' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                              >
+                                By SME
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[9px] font-black text-slate-700">{row._progressPct}%</span>
+                              <input 
+                                type="range" 
+                                min="0" 
+                                max="100" 
+                                step="5"
+                                value={row._progressPct}
+                                onChange={(e: any) => handleCellEdit(row._originalIndex, 'Progress (%)', e.target.value)}
+                                className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1 text-[9px]">
+                              <Calendar size={11} className="text-slate-400 shrink-0" />
+                              <span className="text-[8px] font-bold text-slate-400 uppercase">Target:</span>
+                              <EditableCell 
+                                value={row._target} 
+                                onSave={(val: string) => handleCellEdit(row._originalIndex, 'Target', val)}
+                                className="font-bold text-slate-700 flex-1"
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className="text-[7px] font-black text-blue-600 bg-blue-50 px-1 rounded uppercase">NEW</span>
+                              <div className="flex-1 min-w-0">
+                                <EditableCell 
+                                  value={row['Link Terbaru']} 
+                                  onSave={(val: string) => handleCellEdit(row._originalIndex, 'Link Terbaru', val)}
+                                  className="text-blue-600"
+                                  isLink={true}
+                                />
+                              </div>
+                              {row._linkNew ? <a href={row._linkNew} target="_blank" rel="noreferrer" className="p-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-600 hover:text-white shrink-0"><ExternalLink size={10} /></a> : <div className="p-1 bg-slate-50 text-slate-300 rounded border border-slate-100 cursor-not-allowed"><ExternalLink size={10} /></div>}
+                            </div>
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className="text-[7px] font-black text-slate-500 bg-slate-100 px-1 rounded uppercase">OLD</span>
+                              <div className="flex-1 min-w-0">
+                                <EditableCell 
+                                  value={row['Link File Lama']} 
+                                  onSave={(val: string) => handleCellEdit(row._originalIndex, 'Link File Lama', val)}
+                                  className="text-slate-600"
+                                  isLink={true}
+                                />
+                              </div>
+                              {row._linkOld ? <a href={row._linkOld} target="_blank" rel="noreferrer" className="p-1 bg-slate-50 text-slate-500 rounded hover:bg-slate-600 hover:text-white shrink-0"><ExternalLink size={10} /></a> : <div className="p-1 bg-slate-50 text-slate-300 rounded border border-slate-100 cursor-not-allowed"><ExternalLink size={10} /></div>}
+                            </div>
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className="text-[7px] font-black text-indigo-600 bg-indigo-50 px-1 rounded uppercase">WORK</span>
+                              <div className="flex-1 min-w-0">
+                                <EditableCell 
+                                  value={row['Link Intern']} 
+                                  onSave={(val: string) => handleCellEdit(row._originalIndex, 'Link Intern', val)}
+                                  className="text-indigo-600 font-bold"
+                                  isLink={true}
+                                />
+                              </div>
+                              {row._linkIntern ? <a href={row._linkIntern} target="_blank" rel="noreferrer" className="p-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-600 hover:text-white shrink-0"><ExternalLink size={10} /></a> : <div className="p-1 bg-slate-50 text-slate-300 rounded border border-slate-100 cursor-not-allowed"><ExternalLink size={10} /></div>}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5 align-top">
+                          <EditableCell 
+                            value={row._internNotes || ''} 
+                            onSave={(val: string) => handleCellEdit(row._originalIndex, 'Intern Notes', val)}
+                            isTextArea={true}
+                            className="text-slate-700 text-[10px] font-medium whitespace-pre-wrap min-h-[40px] bg-white border border-slate-200 rounded-md !p-2 leading-relaxed"
                           />
                         </td>
                       </tr>
