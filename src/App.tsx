@@ -472,7 +472,8 @@ const getHRBP = (sbu: string) => {
   if (s.includes('corp') || s.includes('fin') || s.includes('acc') || s.includes('ga') || s.includes('hmm') || s.includes('hr') || s.includes('internal audit') || s.includes('legal') || s.includes('procurement')) return 'Sherly';
   if (s.includes('bpm') || s.includes('it')) return 'Berhard';
   if (s.includes('crewing') || s.includes('msm')) return 'Sentra';
-  if (s.includes('commercial') || s.includes('operation') || s.includes('trade') || s.includes('academy') || s.includes('logistic') || s.includes('trucking')) return 'Taufik';
+  if (s.includes('academy')) return 'Beva';
+  if (s.includes('commercial') || s.includes('operation') || s.includes('trade') || s.includes('logistic') || s.includes('trucking')) return 'Taufik';
   if (s.includes('mtm') || s.includes('terminal') || s.includes('clc') || s.includes('msa')) return 'Ronny';
   return 'Unassigned';
 };
@@ -723,7 +724,7 @@ export default function App() {
       }
 
       // Auto Assign HRBP
-      obj._hrbp = getHRBP(sbu);
+      obj._hrbp = obj['HRBP'] || getHRBP(sbu);
 
       // Defaulting Intern Status dynamically if not present
       let internStateRaw = obj['Intern Status'] || '';
@@ -1358,8 +1359,12 @@ export default function App() {
                             className="font-bold text-slate-500 uppercase"
                           />
                         </td>
-                        <td className="px-4 py-2.5 text-[10px] font-black text-blue-600 uppercase text-center align-middle">
-                          {row._hrbp || '-'}
+                        <td className="px-4 py-2.5">
+                          <EditableCell 
+                            value={row._hrbp || ''} 
+                            onSave={(val: string) => handleCellEdit(row._originalIndex, 'HRBP', val)}
+                            className="text-[10px] font-black text-blue-600 uppercase text-center align-middle"
+                          />
                         </td>
                         
                         <td className="px-4 py-2.5">
