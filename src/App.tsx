@@ -26,7 +26,8 @@ import {
   ShieldCheck,
   ExternalLink,
   History,
-  Activity
+  Activity,
+  Plus
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAnalytics } from "firebase/analytics";
@@ -636,6 +637,23 @@ export default function App() {
   const [sbuFilter, setSbuFilter] = useState("");
   const [hrbpFilter, setHrbpFilter] = useState("");
 
+  // Add Module
+  const [showAddModule, setShowAddModule] = useState(false);
+  const [addModuleError, setAddModuleError] = useState('');
+  const [newModule, setNewModule] = useState({
+    name: '',
+    status: 'On Progress',
+    sbu: '',
+    hrbp: '',
+    sme: '',
+    material: 'No',
+    test: 'No',
+    studyCase: 'No',
+    linkNew: '',
+    linkOld: '',
+    notes: ''
+  });
+
   // FIREBASE INIT
   useEffect(() => {
     const initAuth = async () => {
@@ -1063,6 +1081,87 @@ export default function App() {
     handleMultipleCellEdits(originalIndex, { [headerFallback]: newValue });
   };
 
+  const resetAddModuleForm = () => {
+    setNewModule({
+      name: '', status: 'On Progress', sbu: '', hrbp: '', sme: '',
+      material: 'No', test: 'No', studyCase: 'No',
+      linkNew: '', linkOld: '', notes: ''
+    });
+    setAddModuleError('');
+  };
+
+  const closeAddModule = () => {
+    setShowAddModule(false);
+    resetAddModuleForm();
+  };
+
+  const handleAddModule = async () => {
+    const moduleName = newModule.name.trim();
+    if (!moduleName) {
+      setAddModuleError('Nama module wajib diisi.');
+      return;
+    }
+    if (parsedData.some((row: any) => (row['Nama Module'] || '').trim().toLowerCase() === moduleName.toLowerCase())) {
+      setAddModuleError('Nama module sudah terdaftar. Gunakan nama yang berbeda.');
+      return;
+    }
+
+    const sanitize = (value: string) => (value || '').replace(/[\t\r\n]+/g, ' ').trim();
+    const lines = rawData.trimEnd().split(/\r?\n/);
+    const headers = lines[0].split('\t').map((header: string) => header.trim());
+    const requiredHeaders = [
+      'No', 'Nama Module', 'Status', 'Group SBU/SFU', 'HRBP', 'SME',
+      'Material', 'Test', 'Study Case', 'Link Terbaru', 'Link File Lama',
+      'Notes', 'Intern Status'
+    ];
+
+    requiredHeaders.forEach((header) => {
+      if (!headers.some((existing) => existing.toLowerCase() === header.toLowerCase())) headers.push(header);
+    });
+    lines[0] = headers.join('\t');
+
+    const maxNo = parsedData.reduce((max: number, row: any) => {
+      const current = parseInt(row['No'] || row['NO']) || 0;
+      return Math.max(max, current);
+    }, 0);
+    const rowData: Record<string, string> = {
+      'No': String(maxNo + 1),
+      'Nama Module': moduleName,
+      'Status': newModule.status,
+      'Group SBU/SFU': sanitize(newModule.sbu),
+      'HRBP': sanitize(newModule.hrbp) || getHRBP(newModule.sbu),
+      'SME': sanitize(newModule.sme),
+      'Material': newModule.material,
+      'Test': newModule.test,
+      'Study Case': newModule.studyCase,
+      'Link Terbaru': sanitize(newModule.linkNew),
+      'Link File Lama': sanitize(newModule.linkOld),
+      'Notes': sanitize(newModule.notes),
+      'Intern Status': newModule.status === 'Checked' || newModule.status === 'Final' ? 'Checked by SME' : 'Progress by SME'
+    };
+    const newRow = headers.map((header) => {
+      const matchedKey = Object.keys(rowData).find((key) => key.toLowerCase() === header.toLowerCase());
+      return matchedKey ? rowData[matchedKey] : '';
+    }).join('\t');
+    const newRawData = [...lines, newRow].join('\n');
+
+    setRawData(newRawData);
+    setIsSaving(true);
+    try {
+      if (!user) throw new Error('Cloud connection is not ready');
+      const docRef = doc(db, 'dashboard', 'module_tracker_data_v2');
+      await setDoc(docRef, { tsvData: newRawData, updatedAt: new Date().toISOString(), updatedBy: user.uid });
+      setModuleView('all');
+      closeAddModule();
+    } catch (e: any) {
+      console.error('Add Module Error:', e);
+      setSyncError('Add Module Failed');
+      setAddModuleError('Module belum berhasil disimpan. Silakan coba lagi.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="h-screen bg-[#F8FAFC] text-slate-800 font-sans selection:bg-blue-200 selection:text-blue-900 flex flex-col overflow-hidden">
       
@@ -1250,6 +1349,9 @@ export default function App() {
                     <option value="za">Z-A Name</option>
                   </select>
                   <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2 ml-1">
+                    <button onClick={() => { resetAddModuleForm(); setShowAddModule(true); }} disabled={isSaving || !user} className="text-[9px] font-black text-white bg-indigo-600 hover:bg-indigo-700 flex items-center gap-1.5 uppercase tracking-widest px-3 h-[32px] rounded-lg shadow-md transition-all active:scale-95 disabled:opacity-70" title="Add a new module">
+                      <Plus size={12}/> Add Module
+                    </button>
                     <button onClick={handleSaveToCloud} disabled={isSaving || !user} className="text-[9px] font-black text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-1.5 uppercase tracking-widest px-3 h-[32px] rounded-lg shadow-md transition-all active:scale-95 disabled:opacity-70" title="Sync Changes to Cloud">
                       {isSaving ? <RefreshCw size={11} className="animate-spin" /> : <Save size={11}/>} Sync
                     </button>
@@ -1651,6 +1753,88 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {showAddModule && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/45 backdrop-blur-[2px] flex items-center justify-center p-4" onMouseDown={(e: any) => { if (e.target === e.currentTarget && !isSaving) closeAddModule(); }}>
+          <div className="bg-white w-full max-w-3xl max-h-[92vh] rounded-2xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/70 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-indigo-100 text-indigo-600"><Plus size={16}/></div>
+                <div>
+                  <h2 className="text-[12px] font-black text-slate-800 uppercase tracking-tight">Add New Module</h2>
+                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Module data follows the existing tracker format</p>
+                </div>
+              </div>
+              <button onClick={closeAddModule} disabled={isSaving} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"><X size={16}/></button>
+            </div>
+
+            <div className="p-5 overflow-y-auto custom-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="md:col-span-2 flex flex-col gap-1.5">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Nama Module <span className="text-rose-500">*</span></span>
+                  <input autoFocus value={newModule.name} onChange={(e: any) => { setNewModule({...newModule, name: e.target.value}); setAddModuleError(''); }} placeholder="Masukkan nama module" className="h-[38px] px-3 rounded-lg border border-slate-300 text-[11px] font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500" />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Group SBU/SFU</span>
+                  <input list="add-module-sbu-list" value={newModule.sbu} onChange={(e: any) => setNewModule({...newModule, sbu: e.target.value})} placeholder="Pilih atau ketik SBU/SFU" className="h-[38px] px-3 rounded-lg border border-slate-300 text-[11px] font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <datalist id="add-module-sbu-list">{suggestions.sbus.map((sbu: string) => <option key={sbu} value={sbu}/>)}</datalist>
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">HRBP</span>
+                  <input list="add-module-hrbp-list" value={newModule.hrbp} onChange={(e: any) => setNewModule({...newModule, hrbp: e.target.value})} placeholder={newModule.sbu ? `Auto: ${getHRBP(newModule.sbu)}` : 'Auto berdasarkan SBU/SFU'} className="h-[38px] px-3 rounded-lg border border-slate-300 text-[11px] font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <datalist id="add-module-hrbp-list">{suggestions.hrbps.map((hrbp: string) => <option key={hrbp} value={hrbp}/>)}</datalist>
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">SME</span>
+                  <input value={newModule.sme} onChange={(e: any) => setNewModule({...newModule, sme: e.target.value})} placeholder="Nama SME / PIC" className="h-[38px] px-3 rounded-lg border border-slate-300 text-[11px] font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500" />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Status</span>
+                  <select value={newModule.status} onChange={(e: any) => setNewModule({...newModule, status: e.target.value})} className="h-[38px] px-3 rounded-lg border border-slate-300 bg-white text-[11px] font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="On Progress">On Progress</option><option value="Checked">Checked</option><option value="Final">Final</option><option value="Archived">No Edit / Archived</option>
+                  </select>
+                </label>
+
+                <div className="md:col-span-2 grid grid-cols-3 gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  {[['material', 'Material'], ['test', 'Test'], ['studyCase', 'Study Case']].map(([key, label]) => (
+                    <label key={key} className="flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-lg px-3 h-[38px] cursor-pointer">
+                      <span className="text-[9px] font-black text-slate-600 uppercase tracking-wider">{label}</span>
+                      <input type="checkbox" checked={(newModule as any)[key] === 'Yes'} onChange={(e: any) => setNewModule({...newModule, [key]: e.target.checked ? 'Yes' : 'No'})} className="accent-emerald-600" />
+                    </label>
+                  ))}
+                </div>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Link Terbaru</span>
+                  <input type="url" value={newModule.linkNew} onChange={(e: any) => setNewModule({...newModule, linkNew: e.target.value})} placeholder="https://..." className="h-[38px] px-3 rounded-lg border border-slate-300 text-[11px] font-medium text-blue-600 outline-none focus:ring-2 focus:ring-indigo-500" />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Link File Lama</span>
+                  <input type="url" value={newModule.linkOld} onChange={(e: any) => setNewModule({...newModule, linkOld: e.target.value})} placeholder="https://..." className="h-[38px] px-3 rounded-lg border border-slate-300 text-[11px] font-medium text-slate-600 outline-none focus:ring-2 focus:ring-indigo-500" />
+                </label>
+
+                <label className="md:col-span-2 flex flex-col gap-1.5">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Notes</span>
+                  <textarea value={newModule.notes} onChange={(e: any) => setNewModule({...newModule, notes: e.target.value})} rows={3} placeholder="Catatan tambahan (opsional)" className="p-3 rounded-lg border border-slate-300 text-[11px] font-medium text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                </label>
+              </div>
+              {addModuleError && <p className="mt-3 text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2">{addModuleError}</p>}
+            </div>
+
+            <div className="px-5 py-3 border-t border-slate-200 bg-slate-50/70 flex justify-end gap-2 shrink-0">
+              <button onClick={closeAddModule} disabled={isSaving} className="px-4 h-[34px] rounded-lg border border-slate-300 bg-white text-[9px] font-black text-slate-600 uppercase tracking-widest hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+              <button onClick={handleAddModule} disabled={isSaving || !user} className="px-4 h-[34px] rounded-lg bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest shadow-md hover:bg-indigo-700 flex items-center gap-2 disabled:opacity-60">
+                {isSaving ? <RefreshCw size={11} className="animate-spin"/> : <Plus size={12}/>} {isSaving ? 'Saving...' : 'Add Module'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
