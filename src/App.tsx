@@ -27,7 +27,8 @@ import {
   ExternalLink,
   History,
   Activity,
-  Plus
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAnalytics } from "firebase/analytics";
@@ -1162,6 +1163,37 @@ export default function App() {
     }
   };
 
+  // Delete every stored row for a displayed module, including hidden duplicate names.
+  const handleDeleteModule = async (moduleName: string) => {
+    if (!user || isSaving) return;
+    const lines = rawData.split(/\r?\n/);
+    const nameIndex = lines[0]?.split('\t').findIndex((header: string) => header.trim().toLowerCase() === 'nama module') ?? -1;
+    if (nameIndex < 0) {
+      setSyncError('Delete Module Failed');
+      return;
+    }
+
+    const matches = (line: string) => (line.split('\t')[nameIndex] || '').trim().toLowerCase() === moduleName.trim().toLowerCase();
+    const count = lines.slice(1).filter(matches).length;
+    if (!count) return;
+    if (!window.confirm(`Hapus module "${moduleName}" secara permanen?${count > 1 ? ` (${count} baris dengan nama yang sama akan dihapus.)` : ''}\n\nTindakan ini akan menghapusnya dari data cloud dan tidak dapat dibatalkan.`)) return;
+
+    const newRawData = [lines[0], ...lines.slice(1).filter((line: string) => !matches(line))].join('\n');
+    setIsSaving(true);
+    try {
+      const docRef = doc(db, 'dashboard', 'module_tracker_data_v2');
+      await setDoc(docRef, { tsvData: newRawData, updatedAt: new Date().toISOString(), updatedBy: user.uid });
+      setRawData(newRawData);
+      setSyncError(null);
+    } catch (e: any) {
+      console.error('Delete Module Error:', e);
+      setSyncError('Delete Module Failed');
+      window.alert('Module belum berhasil dihapus. Silakan coba lagi.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="h-screen bg-[#F8FAFC] text-slate-800 font-sans selection:bg-blue-200 selection:text-blue-900 flex flex-col overflow-hidden">
       
@@ -1380,6 +1412,7 @@ export default function App() {
                       <th className="px-3 py-3 text-center" title="Study Case Sudah Siap?">Case</th>
                       <th className="px-5 py-3 text-center min-w-[150px]">Akses (Files)</th>
                       <th className="px-5 py-3 min-w-[200px]">Notes</th>
+                      <th className="px-4 py-3 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1524,6 +1557,18 @@ export default function App() {
                             isTextArea={true}
                             className="text-slate-600 text-[10px] font-medium whitespace-pre-wrap min-h-[40px] bg-white border border-slate-200 rounded-md !p-2 leading-relaxed"
                           />
+                        </td>
+                        <td className="px-4 py-2.5 text-center align-top">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteModule(row['Nama Module'])}
+                            disabled={isSaving || !user}
+                            className="p-2 rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={`Delete ${row['Nama Module']}`}
+                            aria-label={`Delete module ${row['Nama Module']}`}
+                          >
+                            <Trash2 size={13} />
+                          </button>
                         </td>
                       </tr>
                     )})}
